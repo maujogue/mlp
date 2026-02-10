@@ -1,0 +1,28 @@
+[project]
+name = "mlp"
+version = "0.1.0"
+description = "A neural network from scratch, to predict cancerous breast cell"
+readme = "README.md"
+authors = [
+    { name = "Mathis", email = "maujogue15@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "numpy>=2.4.2",
+    "pandas>=3.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.0",
+    "ty>=0.0.15",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.0,<0.11.0"]
+build-backend = "uv_build"
+
+[project.scripts]
+mlp-split = "mlp.cli:main_split"
+mlp-train = "mlp.cli:main_train"
+mlp-predict = "mlp.cli:main_predict"
