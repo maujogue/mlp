@@ -44,6 +44,32 @@ def main_split() -> None:
 #     # TODO: Call the actual training function here
 
 
+# ---------- eda command ----------
+def main_eda() -> None:
+    parser = argparse.ArgumentParser(
+        description="Run exploratory data analysis and save figures"
+    )
+    parser.add_argument(
+        "dataset_path",
+        nargs="?",
+        default="datasets/train.csv",
+        type=str,
+        help="Path to training CSV (default: datasets/train.csv)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        "-o",
+        default="figures/eda",
+        type=str,
+        help="Directory to save EDA figures (default: figures/eda)",
+    )
+    args = parser.parse_args()
+
+    from .data.feature_engineering import run_eda
+
+    run_eda(dataset_path=args.dataset_path, output_dir=args.output_dir)
+
+
 # ---------- predict command ----------
 # def main_predict() -> None:
 #     parser = argparse.ArgumentParser(description="Predict using the trained model")

@@ -8,9 +8,11 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "matplotlib>=3.10.8",
     "numpy>=2.4.2",
     "pandas>=3.0.0",
     "scikit-learn",
+    "seaborn>=0.13.2",
 ]
 
 [dependency-groups]
@@ -27,3 +29,4 @@ build-backend = "uv_build"
 mlp-split = "mlp.cli:main_split"
 mlp-train = "mlp.cli:main_train"
 mlp-predict = "mlp.cli:main_predict"
+mlp-eda = "mlp.cli:main_eda"
