@@ -1,4 +1,6 @@
+import json
 import os
+from pathlib import Path
 
 import numpy as np
 
@@ -71,6 +73,88 @@ def save_model(
     else:
         _save_txt(model, filepath)
     print(f"Model saved to {filepath}")
+
+
+def save_training_history(
+    run_dir: str,
+    history_train_loss: list[float],
+    history_val_loss: list[float],
+    history_train_acc: list[float],
+    history_val_acc: list[float],
+    history_train_precision: list[float],
+    history_val_precision: list[float],
+    history_train_recall: list[float],
+    history_val_recall: list[float],
+    history_train_f1: list[float],
+    history_val_f1: list[float],
+    elapsed_seconds: float,
+) -> None:
+    """Write history.json and run_config.json into run_dir (used when using temp layout)."""
+    path = Path(run_dir)
+    path.mkdir(parents=True, exist_ok=True)
+    data = {
+        "history_train_loss": history_train_loss,
+        "history_val_loss": history_val_loss,
+        "history_train_acc": history_train_acc,
+        "history_val_acc": history_val_acc,
+        "history_train_precision": history_train_precision,
+        "history_val_precision": history_val_precision,
+        "history_train_recall": history_train_recall,
+        "history_val_recall": history_val_recall,
+        "history_train_f1": history_train_f1,
+        "history_val_f1": history_val_f1,
+        "elapsed_seconds": elapsed_seconds,
+        "epochs_ran": len(history_train_loss),
+    }
+    with open(path / "history.json", "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def save_run_config(
+    run_dir: str,
+    train_path: str,
+    val_path: str,
+    layers: list[int],
+    epochs: int,
+    learning_rate: float,
+    seed: int,
+    batch_size: int,
+    optimizer: str,
+    patience: int,
+    min_delta: float,
+) -> None:
+    """Write run_config.json with the options used for this run."""
+    path = Path(run_dir)
+    path.mkdir(parents=True, exist_ok=True)
+    data = {
+        "train_path": train_path,
+        "val_path": val_path,
+        "layers": layers,
+        "epochs": epochs,
+        "learning_rate": learning_rate,
+        "seed": seed,
+        "batch_size": batch_size,
+        "optimizer": optimizer,
+        "patience": patience,
+        "min_delta": min_delta,
+    }
+    with open(path / "run_config.json", "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def load_training_history(run_folder: str) -> dict:
+    """Load training history (and optional run_config) from a run folder."""
+    folder = Path(run_folder)
+    history_path = folder / "history.json"
+    if not history_path.exists():
+        raise FileNotFoundError(f"history.json not found in {run_folder}")
+    with open(history_path) as f:
+        data = json.load(f)
+    config_path = folder / "run_config.json"
+    if config_path.exists():
+        with open(config_path) as f:
+            data["run_config"] = json.load(f)
+    return data
 
 
 def load_model(

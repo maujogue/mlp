@@ -1,4 +1,7 @@
-from typing import Union
+import re
+import time
+from pathlib import Path
+from typing import Any, Union
 
 import numpy as np
 
@@ -7,7 +10,7 @@ from ..utils.constants import FEATURE_COLUMNS, LABELS
 from ..utils.loader import load_dataset
 from .model import MLPClassifier
 from .plots import save_learning_curves
-from .serialization import load_model, save_model
+from .serialization import load_model, save_model, save_run_config, save_training_history
 
 INDEX_TO_LABEL = {v: k for k, v in LABELS.items()}
 
@@ -96,6 +99,50 @@ def _margin_loss_grad(logits: np.ndarray, y: np.ndarray) -> np.ndarray:
     return d_logits
 
 
+def _sanitize(value: Any) -> str:
+    """Turn an option value into a filesystem-safe string (no spaces, path separators)."""
+    if isinstance(value, list):
+        return "-".join(str(v) for v in value)
+    s = str(value).strip().lower()
+    s = re.sub(r"[^\w\-.]", "_", s)
+    return s or "default"
+
+
+def build_run_dir(
+    root: str = "temp",
+    *,
+    train_path: str = "",
+    val_path: str = "",
+    layers: list[int] | None = None,
+    epochs: int = 70,
+    learning_rate: float = 0.03,
+    seed: int = 42,
+    batch_size: int = 0,
+    optimizer: str = "sgd",
+    patience: int = 0,
+    min_delta: float = 0.0,
+) -> str:
+    """Build a run directory name: root/option1-value1_option2-value2_<timestamp>."""
+    parts = []
+    if train_path:
+        parts.append(f"train-{_sanitize(Path(train_path).stem)}")
+    if val_path:
+        parts.append(f"val-{_sanitize(Path(val_path).stem)}")
+    parts.append(f"layers-{_sanitize(layers or [24, 24])}")
+    parts.append(f"epochs-{epochs}")
+    parts.append(f"lr-{_sanitize(learning_rate)}")
+    parts.append(f"seed-{seed}")
+    parts.append(f"batch-{batch_size if batch_size > 0 else 'full'}")
+    parts.append(f"optim-{optimizer}")
+    parts.append(f"patience-{patience}")
+    parts.append(f"mindelta-{_sanitize(min_delta)}")
+    timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
+    name = "_".join(parts) + "_" + timestamp
+    run_dir = Path(root) / name
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return str(run_dir)
+
+
 def train_cmd(
     train_path: str = "datasets/train.csv",
     val_path: str = "datasets/val.csv",
@@ -103,8 +150,9 @@ def train_cmd(
     epochs: int = 70,
     learning_rate: float = 0.01,
     seed: int = 42,
-    model_path: str = "weights/model",
-    curves_dir: str = "figures/training",
+    model_path: str | None = None,
+    curves_dir: str | None = None,
+    run_dir: str | None = None,
     batch_size: int = 0,
     optimizer: str = "sgd",
     patience: int = 0,
@@ -112,6 +160,30 @@ def train_cmd(
 ) -> None:
     # batch_size=0 means full dataset per step (full-batch gradient descent)
     # patience=0 means early stopping disabled
+    if run_dir is not None:
+        Path(run_dir).mkdir(parents=True, exist_ok=True)
+        model_path = str(Path(run_dir) / "model.npz")
+        curves_dir = str(Path(run_dir) / "figures")
+    elif model_path is None and curves_dir is None:
+        run_dir = build_run_dir(
+            root="temp",
+            train_path=train_path,
+            val_path=val_path,
+            layers=layers,
+            epochs=epochs,
+            learning_rate=learning_rate,
+            seed=seed,
+            batch_size=batch_size,
+            optimizer=optimizer,
+            patience=patience,
+            min_delta=min_delta,
+        )
+        model_path = str(Path(run_dir) / "model.npz")
+        curves_dir = str(Path(run_dir) / "figures")
+    else:
+        model_path = model_path or "weights/model"
+        curves_dir = curves_dir or "figures/training"
+
     X_train, y_train = _load_split_csv(train_path)
     X_val, y_val = _load_split_csv(val_path)
 
@@ -143,6 +215,7 @@ def train_cmd(
 
     n_train = len(X_train)
     effective_batch_size = batch_size if batch_size > 0 else n_train
+    start_time = time.perf_counter()
     for epoch in range(1, epochs + 1):
         indices = np.random.default_rng(seed + epoch).permutation(n_train)
 
@@ -202,6 +275,7 @@ def train_cmd(
             np.copyto(model._layers[i][0], best_weights[i][0])
             np.copyto(model._layers[i][1], best_weights[i][1])
 
+    elapsed_seconds = time.perf_counter() - start_time
     save_model(model, model_path)
     save_learning_curves(
         history_train_loss,
@@ -216,6 +290,34 @@ def train_cmd(
         history_val_f1,
         curves_dir,
     )
+    if run_dir is not None:
+        save_training_history(
+            run_dir,
+            history_train_loss,
+            history_val_loss,
+            history_train_acc,
+            history_val_acc,
+            history_train_precision,
+            history_val_precision,
+            history_train_recall,
+            history_val_recall,
+            history_train_f1,
+            history_val_f1,
+            elapsed_seconds,
+        )
+        save_run_config(
+            run_dir,
+            train_path=train_path,
+            val_path=val_path,
+            layers=hidden,
+            epochs=epochs,
+            learning_rate=learning_rate,
+            seed=seed,
+            batch_size=batch_size,
+            optimizer=optimizer,
+            patience=patience,
+            min_delta=min_delta,
+        )
     print(f"Training figures saved to {curves_dir}")
 
 
