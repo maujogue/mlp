@@ -35,11 +35,31 @@ def _binary_cross_entropy_from_probabilities(
     return float(-np.mean(y * np.log(p) + (1.0 - y) * np.log(1.0 - p)))
 
 
+def _precision_recall_f1(
+    y_true: np.ndarray,
+    pred_positive: np.ndarray,
+) -> tuple[float, float, float]:
+    """Binary precision, recall, F1 (positive class = 1). Vectorized."""
+    y = np.asarray(y_true, dtype=np.float64)
+    pred = (np.asarray(pred_positive, dtype=np.float64) >= 0.5).astype(np.float64)
+    tp = float(np.sum(pred * y))
+    fp = float(np.sum(pred * (1.0 - y)))
+    fn = float(np.sum((1.0 - pred) * y))
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1 = (
+        2.0 * precision * recall / (precision + recall)
+        if (precision + recall) > 0
+        else 0.0
+    )
+    return precision, recall, f1
+
+
 def _evaluate_dataset(
     model: MLPClassifier,
     X: np.ndarray,
     y: np.ndarray,
-) -> tuple[float, float]:
+) -> tuple[float, float, float, float, float]:
     """Eval once per epoch: single batch forward, vectorized metrics."""
     X_arr = np.asarray(X, dtype=np.float64)
     if X_arr.ndim == 1:
@@ -48,7 +68,8 @@ def _evaluate_dataset(
     y_arr = np.asarray(y, dtype=np.float64)
     bce = _binary_cross_entropy_from_probabilities(y_arr, p)
     accuracy = float(np.mean((p >= 0.5) == y_arr))
-    return bce, accuracy
+    precision, recall, f1 = _precision_recall_f1(y_arr, p)
+    return bce, accuracy, precision, recall, f1
 
 
 def _margin_loss(logits: np.ndarray, y: np.ndarray) -> float:
@@ -106,6 +127,12 @@ def train_cmd(
     history_val_loss: list[float] = []
     history_train_acc: list[float] = []
     history_val_acc: list[float] = []
+    history_train_precision: list[float] = []
+    history_val_precision: list[float] = []
+    history_train_recall: list[float] = []
+    history_val_recall: list[float] = []
+    history_train_f1: list[float] = []
+    history_val_f1: list[float] = []
 
     best_val_loss: float = np.inf
     epochs_no_improve: int = 0
@@ -132,12 +159,22 @@ def train_cmd(
                 optimizer=optimizer,
             )
 
-        train_loss, train_acc = _evaluate_dataset(model, X_train, y_train)
-        val_loss, val_acc = _evaluate_dataset(model, X_val, y_val)
+        train_loss, train_acc, train_prec, train_rec, train_f1 = _evaluate_dataset(
+            model, X_train, y_train
+        )
+        val_loss, val_acc, val_prec, val_rec, val_f1 = _evaluate_dataset(
+            model, X_val, y_val
+        )
         history_train_loss.append(train_loss)
         history_val_loss.append(val_loss)
         history_train_acc.append(train_acc)
         history_val_acc.append(val_acc)
+        history_train_precision.append(train_prec)
+        history_val_precision.append(val_prec)
+        history_train_recall.append(train_rec)
+        history_val_recall.append(val_rec)
+        history_train_f1.append(train_f1)
+        history_val_f1.append(val_f1)
 
         # Early stopping: track best validation loss and save weights
         if patience > 0:
@@ -151,7 +188,9 @@ def train_cmd(
         print(
             f"epoch {epoch:02d}/{epochs} - "
             f"loss: {train_loss:.4f} - acc: {train_acc:.4f} - "
-            f"val_loss: {val_loss:.4f} - val_acc: {val_acc:.4f}"
+            f"prec: {train_prec:.4f} - rec: {train_rec:.4f} - f1: {train_f1:.4f} - "
+            f"val_loss: {val_loss:.4f} - val_acc: {val_acc:.4f} - "
+            f"val_prec: {val_prec:.4f} - val_rec: {val_rec:.4f} - val_f1: {val_f1:.4f}"
         )
 
         if patience > 0 and epochs_no_improve >= patience:
@@ -169,6 +208,12 @@ def train_cmd(
         history_val_loss,
         history_train_acc,
         history_val_acc,
+        history_train_precision,
+        history_val_precision,
+        history_train_recall,
+        history_val_recall,
+        history_train_f1,
+        history_val_f1,
         curves_dir,
     )
     print(f"Training figures saved to {curves_dir}")
