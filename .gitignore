@@ -11,3 +11,4 @@ wheels/
 datasets/
 figures/
 weights/
+.DS_Store

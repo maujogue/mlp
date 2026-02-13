@@ -36,12 +36,77 @@ def main_split() -> None:
 
 
 # ---------- train command ----------
-# def main_train() -> None:
-#     parser = argparse.ArgumentParser(description="Train the model on the dataset")
-#     # Add arguments here if needed (e.g., epochs, batch size)
-#     args = parser.parse_args()
-#     print("Training the model...")
-#     # TODO: Call the actual training function here
+def main_train() -> None:
+    parser = argparse.ArgumentParser(description="Train the model on the dataset")
+    parser.add_argument(
+        "--train-path",
+        default="datasets/train.csv",
+        type=str,
+        help="Path to training CSV (default: datasets/train.csv)",
+    )
+    parser.add_argument(
+        "--val-path",
+        default="datasets/val.csv",
+        type=str,
+        help="Path to validation CSV (default: datasets/val.csv)",
+    )
+    parser.add_argument(
+        "--layers",
+        nargs="+",
+        default=[24, 24],
+        type=int,
+        help="Hidden layer sizes (default: 24 24)",
+    )
+    parser.add_argument(
+        "--epochs",
+        default=70,
+        type=int,
+        help="Number of epochs (default: 70)",
+    )
+    parser.add_argument(
+        "--learning-rate",
+        default=0.03,
+        type=float,
+        help="Learning rate (default: 0.03)",
+    )
+    parser.add_argument(
+        "--seed",
+        default=42,
+        type=int,
+        help="Random seed (default: 42)",
+    )
+    parser.add_argument(
+        "--model-path",
+        default="weights/model",
+        type=str,
+        help="Path where the model will be saved (default: weights/model, viewable .txt)",
+    )
+    parser.add_argument(
+        "--curves-dir",
+        default="figures/training",
+        type=str,
+        help="Directory to save learning curves (default: figures/training)",
+    )
+    parser.add_argument(
+        "--batch-size",
+        default=0,
+        type=int,
+        help="Batch size; 0 = full dataset (default: 0)",
+    )
+    args = parser.parse_args()
+    from .model.training import train_cmd
+
+    train_cmd(
+        train_path=args.train_path,
+        val_path=args.val_path,
+        layers=args.layers,
+        epochs=args.epochs,
+        learning_rate=args.learning_rate,
+        seed=args.seed,
+        model_path=args.model_path,
+        curves_dir=args.curves_dir,
+        batch_size=args.batch_size,
+    )
 
 
 # ---------- eda command ----------
@@ -71,9 +136,32 @@ def main_eda() -> None:
 
 
 # ---------- predict command ----------
-# def main_predict() -> None:
-#     parser = argparse.ArgumentParser(description="Predict using the trained model")
-#     # Add arguments here if needed (e.g., input file)
-#     args = parser.parse_args()
-#     print("Predicting with the trained model...")
-#     # TODO: Call the actual prediction function here
+def main_predict() -> None:
+    parser = argparse.ArgumentParser(description="Predict using the trained model")
+    parser.add_argument(
+        "dataset_path",
+        nargs="?",
+        default="datasets/val.csv",
+        type=str,
+        help="Path to CSV used for prediction (default: datasets/val.csv)",
+    )
+    parser.add_argument(
+        "--model-path",
+        default="weights/model",
+        type=str,
+        help="Path to saved model (default: weights/model)",
+    )
+    parser.add_argument(
+        "--output-path",
+        default=None,
+        type=str,
+        help="Optional CSV path to save predictions",
+    )
+    args = parser.parse_args()
+    from .model.training import predict_cmd
+
+    predict_cmd(
+        dataset_path=args.dataset_path,
+        model_path=args.model_path,
+        output_path=args.output_path,
+    )
