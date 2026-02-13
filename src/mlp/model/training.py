@@ -86,8 +86,11 @@ def train_cmd(
     curves_dir: str = "figures/training",
     batch_size: int = 0,
     optimizer: str = "sgd",
+    patience: int = 0,
+    min_delta: float = 0.0,
 ) -> None:
     # batch_size=0 means full dataset per step (full-batch gradient descent)
+    # patience=0 means early stopping disabled
     X_train, y_train = _load_split_csv(train_path)
     X_val, y_val = _load_split_csv(val_path)
 
@@ -103,6 +106,10 @@ def train_cmd(
     history_val_loss: list[float] = []
     history_train_acc: list[float] = []
     history_val_acc: list[float] = []
+
+    best_val_loss: float = np.inf
+    epochs_no_improve: int = 0
+    best_weights: list[tuple[np.ndarray, np.ndarray]] | None = None
 
     print(f"x_train shape : {X_train.shape}")
     print(f"x_valid shape : {X_val.shape}")
@@ -132,11 +139,29 @@ def train_cmd(
         history_train_acc.append(train_acc)
         history_val_acc.append(val_acc)
 
+        # Early stopping: track best validation loss and save weights
+        if patience > 0:
+            if val_loss < best_val_loss - min_delta:
+                best_val_loss = val_loss
+                epochs_no_improve = 0
+                best_weights = [(W.copy(), b.copy()) for W, b in model.parameters()]
+            else:
+                epochs_no_improve += 1
+
         print(
             f"epoch {epoch:02d}/{epochs} - "
             f"loss: {train_loss:.4f} - acc: {train_acc:.4f} - "
             f"val_loss: {val_loss:.4f} - val_acc: {val_acc:.4f}"
         )
+
+        if patience > 0 and epochs_no_improve >= patience:
+            print(f"Early stopping at epoch {epoch} (no improvement for {patience} epochs).")
+            break
+
+    if best_weights is not None:
+        for i in range(len(model._layers)):
+            np.copyto(model._layers[i][0], best_weights[i][0])
+            np.copyto(model._layers[i][1], best_weights[i][1])
 
     save_model(model, model_path)
     save_learning_curves(

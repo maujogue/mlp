@@ -100,6 +100,18 @@ def main_train() -> None:
         type=str,
         help="Optimizer: sgd or rmsprop (default: sgd)",
     )
+    parser.add_argument(
+        "--patience",
+        default=0,
+        type=int,
+        help="Early stopping: stop after N epochs without val_loss improvement; 0 = disabled (default: 0)",
+    )
+    parser.add_argument(
+        "--min-delta",
+        default=0.0,
+        type=float,
+        help="Early stopping: minimum change in val_loss to count as improvement (default: 0.0)",
+    )
     args = parser.parse_args()
     from .model.training import train_cmd
 
@@ -113,7 +125,9 @@ def main_train() -> None:
         model_path=args.model_path,
         curves_dir=args.curves_dir,
         batch_size=args.batch_size,
-        optimizer=args.optimizer
+        optimizer=args.optimizer,
+        patience=args.patience,
+        min_delta=args.min_delta,
     )
 
 
