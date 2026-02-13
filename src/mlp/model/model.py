@@ -41,6 +41,9 @@ class MLPClassifier:
         self._cache: list[tuple[np.ndarray, ...]] = []
         self._grad_W: list[np.ndarray] = []
         self._grad_b: list[np.ndarray] = []
+        # RMSprop state: running average of squared gradients (lazy init)
+        self._rms_W: list[np.ndarray] = []
+        self._rms_b: list[np.ndarray] = []
 
     def forward(self, X: np.ndarray) -> np.ndarray:
         """Batch forward: X (B, n_features) -> logits (B, output_size)."""
@@ -84,12 +87,38 @@ class MLPClassifier:
             for g in self._grad_b:
                 g.fill(0)
 
-    def step(self, learning_rate: float) -> None:
-        """SGD step using accumulated gradients."""
-        for i in range(len(self._layers)):
-            W, b = self._layers[i]
-            W -= learning_rate * self._grad_W[i]
-            b -= learning_rate * self._grad_b[i]
+    def step(
+        self,
+        learning_rate: float,
+        optimizer: str = "sgd",
+        *,
+        decay: float = 0.99,
+        eps: float = 1e-8,
+    ) -> None:
+        """Update parameters using accumulated gradients.
+
+        optimizer: "sgd" (fixed lr) or "rmsprop" (per-parameter adaptive lr).
+        For RMSprop: decay is the smoothing constant (rho), eps stabilizes sqrt.
+        """
+        if optimizer == "sgd":
+            for i in range(len(self._layers)):
+                W, b = self._layers[i]
+                W -= learning_rate * self._grad_W[i]
+                b -= learning_rate * self._grad_b[i]
+            return
+        if optimizer == "rmsprop":
+            if not self._rms_W:
+                self._rms_W = [np.zeros_like(W) for W, _ in self._layers]
+                self._rms_b = [np.zeros_like(b) for _, b in self._layers]
+            for i in range(len(self._layers)):
+                gW, gb = self._grad_W[i], self._grad_b[i]
+                self._rms_W[i] = decay * self._rms_W[i] + (1.0 - decay) * (gW * gW)
+                self._rms_b[i] = decay * self._rms_b[i] + (1.0 - decay) * (gb * gb)
+                W, b = self._layers[i]
+                W -= learning_rate * gW / (np.sqrt(self._rms_W[i]) + eps)
+                b -= learning_rate * gb / (np.sqrt(self._rms_b[i]) + eps)
+            return
+        raise ValueError(f"Unknown optimizer: {optimizer!r}. Use 'sgd' or 'rmsprop'.")
 
     def parameters(self) -> list[tuple[np.ndarray, np.ndarray]]:
         return list(self._layers)

@@ -85,6 +85,7 @@ def train_cmd(
     model_path: str = "weights/model",
     curves_dir: str = "figures/training",
     batch_size: int = 0,
+    optimizer: str = "sgd",
 ) -> None:
     # batch_size=0 means full dataset per step (full-batch gradient descent)
     X_train, y_train = _load_split_csv(train_path)
@@ -117,10 +118,12 @@ def train_cmd(
             y_batch = y_train[batch_idx]
             model.zero_grad()
             logits = model.forward(X_batch)
-            loss = _margin_loss(logits, y_batch)
             d_logits = _margin_loss_grad(logits, y_batch)
             model.backward(d_logits)
-            model.step(learning_rate=learning_rate)
+            model.step(
+                learning_rate=learning_rate,
+                optimizer=optimizer,
+            )
 
         train_loss, train_acc = _evaluate_dataset(model, X_train, y_train)
         val_loss, val_acc = _evaluate_dataset(model, X_val, y_val)

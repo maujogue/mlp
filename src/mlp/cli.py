@@ -93,6 +93,13 @@ def main_train() -> None:
         type=int,
         help="Batch size; 0 = full dataset (default: 0)",
     )
+    parser.add_argument(
+        "--optimizer",
+        default="sgd",
+        choices=("sgd", "rmsprop"),
+        type=str,
+        help="Optimizer: sgd or rmsprop (default: sgd)",
+    )
     args = parser.parse_args()
     from .model.training import train_cmd
 
@@ -106,6 +113,7 @@ def main_train() -> None:
         model_path=args.model_path,
         curves_dir=args.curves_dir,
         batch_size=args.batch_size,
+        optimizer=args.optimizer
     )
 
 
