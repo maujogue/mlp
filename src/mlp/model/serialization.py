@@ -4,7 +4,8 @@ from pathlib import Path
 
 import numpy as np
 
-from .model import MLPClassifier
+from .mlp_classifier import MLPClassifier
+from .schemas import TrainingHistory, TrainingRunConfig
 
 
 def save_model(
@@ -32,34 +33,21 @@ def save_model(
 
 def save_training_history(
     run_dir: str,
-    history_train_loss: list[float],
-    history_val_loss: list[float],
-    history_train_acc: list[float],
-    history_val_acc: list[float],
-    history_train_precision: list[float],
-    history_val_precision: list[float],
-    history_train_recall: list[float],
-    history_val_recall: list[float],
-    history_train_f1: list[float],
-    history_val_f1: list[float],
+    history: TrainingHistory | dict[str, list[float]],
     elapsed_seconds: float,
 ) -> None:
     """Write history.json and run_config.json into run_dir (used when using temp layout)."""
     path = Path(run_dir)
     path.mkdir(parents=True, exist_ok=True)
+    validated_history = (
+        history
+        if isinstance(history, TrainingHistory)
+        else TrainingHistory.model_validate(history)
+    )
     data = {
-        "history_train_loss": history_train_loss,
-        "history_val_loss": history_val_loss,
-        "history_train_acc": history_train_acc,
-        "history_val_acc": history_val_acc,
-        "history_train_precision": history_train_precision,
-        "history_val_precision": history_val_precision,
-        "history_train_recall": history_train_recall,
-        "history_val_recall": history_val_recall,
-        "history_train_f1": history_train_f1,
-        "history_val_f1": history_val_f1,
+        **validated_history.model_dump(by_alias=True),
         "elapsed_seconds": elapsed_seconds,
-        "epochs_ran": len(history_train_loss),
+        "epochs_ran": len(validated_history.train_loss),
     }
     with open(path / "history.json", "w") as f:
         json.dump(data, f, indent=2)
@@ -67,30 +55,17 @@ def save_training_history(
 
 def save_run_config(
     run_dir: str,
-    train_path: str,
-    val_ratio: float,
-    layers: list[int],
-    epochs: int,
-    learning_rate: float,
-    seed: int,
-    batch_size: int,
-    optimizer: str,
-    patience: int,
+    run_config: TrainingRunConfig | dict,
 ) -> None:
     """Write run_config.json with the options used for this run."""
     path = Path(run_dir)
     path.mkdir(parents=True, exist_ok=True)
-    data = {
-        "train_path": train_path,
-        "val_ratio": val_ratio,
-        "layers": layers,
-        "epochs": epochs,
-        "learning_rate": learning_rate,
-        "seed": seed,
-        "batch_size": batch_size,
-        "optimizer": optimizer,
-        "patience": patience,
-    }
+    validated_config = (
+        run_config
+        if isinstance(run_config, TrainingRunConfig)
+        else TrainingRunConfig.model_validate(run_config)
+    )
+    data = validated_config.model_dump()
     with open(path / "run_config.json", "w") as f:
         json.dump(data, f, indent=2)
 
@@ -102,11 +77,20 @@ def load_training_history(run_folder: str) -> dict:
     if not history_path.exists():
         raise FileNotFoundError(f"history.json not found in {run_folder}")
     with open(history_path) as f:
-        data = json.load(f)
+        history_data = json.load(f)
+    validated_history = TrainingHistory.model_validate(history_data)
+    data = validated_history.model_dump(by_alias=True)
+    data["elapsed_seconds"] = history_data.get("elapsed_seconds")
+    data["epochs_ran"] = history_data.get(
+        "epochs_ran", len(validated_history.train_loss)
+    )
     config_path = folder / "run_config.json"
     if config_path.exists():
         with open(config_path) as f:
-            data["run_config"] = json.load(f)
+            run_config_data = json.load(f)
+        data["run_config"] = TrainingRunConfig.model_validate(
+            run_config_data
+        ).model_dump()
     return data
 
 

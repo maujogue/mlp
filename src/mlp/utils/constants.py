@@ -31,13 +31,17 @@ FEATURE_COLUMNS = [
     "worst fractal dimension",
 ]
 
+
 LABELS = {
     "B": 0,  # Benign
     "M": 1,  # Malignant
 }
 
+INDEX_TO_LABEL = {0: "B", 1: "M"}
+
 DEFAULT_DATASET = "datasets/data.csv"
 
+DEFAULT_RUN_DIR = "temp"
 BLUE = "\033[94m"
 GREEN = "\033[92m"
 RESET = "\033[0m"

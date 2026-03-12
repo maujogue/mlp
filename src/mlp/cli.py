@@ -1,6 +1,8 @@
 import argparse
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from .utils.constants import BLUE, RESET
 
 
@@ -136,6 +138,7 @@ def main_train() -> None:
     )
     args = parser.parse_args()
     from .model.compare import run_best_search
+    from .model.schemas import TrainingRunConfig
     from .model.training import train_cmd
 
     if args.best is not None:
@@ -148,16 +151,32 @@ def main_train() -> None:
             test_paths=test_paths,
         )
     else:
+        try:
+            validated = TrainingRunConfig.model_validate(
+                {
+                    "train_path": args.train_path,
+                    "val_ratio": args.val_ratio,
+                    "layers": args.layers,
+                    "epochs": args.epochs,
+                    "learning_rate": args.learning_rate,
+                    "seed": args.seed,
+                    "batch_size": args.batch_size,
+                    "optimizer": args.optimizer,
+                    "patience": args.patience,
+                }
+            )
+        except ValidationError as exc:
+            parser.error(str(exc))
         train_cmd(
-            train_path=args.train_path,
-            val_ratio=args.val_ratio,
-            layers=args.layers,
-            epochs=args.epochs,
-            learning_rate=args.learning_rate,
-            seed=args.seed,
-            batch_size=args.batch_size,
-            optimizer=args.optimizer,
-            patience=args.patience,
+            train_path=validated.train_path,
+            val_ratio=validated.val_ratio,
+            layers=validated.layers,
+            epochs=validated.epochs,
+            learning_rate=validated.learning_rate,
+            seed=validated.seed,
+            batch_size=validated.batch_size,
+            optimizer=validated.optimizer,
+            patience=validated.patience,
         )
 
 
@@ -296,7 +315,7 @@ def main_predict() -> None:
         help="Optional CSV path to save predictions",
     )
     args = parser.parse_args()
-    from .model.training import predict_cmd
+    from .model.predict import predict_cmd
 
     predict_cmd(
         model_path=args.model_path,

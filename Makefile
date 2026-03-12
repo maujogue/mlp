@@ -9,4 +9,8 @@ format:
 type:
 	ty check
 
-all: lint format type
+all:
+	make format
+	make lint
+	make type
+	

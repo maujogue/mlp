@@ -7,11 +7,10 @@ from pathlib import Path
 from .plots import plot_comparison
 from .serialization import load_training_history
 from .training import (
-    _sanitize,
-    evaluate_model_on_dataset,
-    evaluate_model_on_datasets,
     train_cmd,
 )
+from ..utils.loader import _sanitize
+from .evaluation import evaluate_model_on_dataset, evaluate_model_on_datasets
 
 TOP_N = 5  # Number of best runs to display per metric
 

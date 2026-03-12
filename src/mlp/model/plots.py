@@ -2,6 +2,8 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
+from .schemas import TrainingHistory
+
 
 def _run_label(folder: str) -> str:
     """Label for a run curve: basename of folder."""
@@ -9,26 +11,22 @@ def _run_label(folder: str) -> str:
 
 
 def save_learning_curves(
-    train_losses: list[float],
-    val_losses: list[float],
-    train_accuracies: list[float],
-    val_accuracies: list[float],
-    train_precisions: list[float],
-    val_precisions: list[float],
-    train_recalls: list[float],
-    val_recalls: list[float],
-    train_f1s: list[float],
-    val_f1s: list[float],
+    history: TrainingHistory | dict[str, list[float]],
     output_dir: str = "figures/training",
 ) -> None:
+    validated_history = (
+        history
+        if isinstance(history, TrainingHistory)
+        else TrainingHistory.model_validate(history)
+    )
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    epochs = list(range(1, len(train_losses) + 1))
+    epochs = list(range(1, len(validated_history.train_loss) + 1))
 
     plt.figure(figsize=(8, 5))
-    plt.plot(epochs, train_losses, label="train_loss")
-    plt.plot(epochs, val_losses, label="val_loss")
+    plt.plot(epochs, validated_history.train_loss, label="train_loss")
+    plt.plot(epochs, validated_history.val_loss, label="val_loss")
     plt.xlabel("Epoch")
     plt.ylabel("Binary cross-entropy")
     plt.title("Loss curves")
@@ -38,8 +36,8 @@ def save_learning_curves(
     plt.close()
 
     plt.figure(figsize=(8, 5))
-    plt.plot(epochs, train_accuracies, label="train_acc")
-    plt.plot(epochs, val_accuracies, label="val_acc")
+    plt.plot(epochs, validated_history.train_accuracy, label="train_acc")
+    plt.plot(epochs, validated_history.val_accuracy, label="val_acc")
     plt.xlabel("Epoch")
     plt.ylabel("Accuracy")
     plt.title("Accuracy curves")
@@ -49,12 +47,12 @@ def save_learning_curves(
     plt.close()
 
     plt.figure(figsize=(8, 5))
-    plt.plot(epochs, train_precisions, label="train_precision")
-    plt.plot(epochs, val_precisions, label="val_precision")
-    plt.plot(epochs, train_recalls, label="train_recall")
-    plt.plot(epochs, val_recalls, label="val_recall")
-    plt.plot(epochs, train_f1s, label="train_f1")
-    plt.plot(epochs, val_f1s, label="val_f1")
+    plt.plot(epochs, validated_history.train_precision, label="train_precision")
+    plt.plot(epochs, validated_history.val_precision, label="val_precision")
+    plt.plot(epochs, validated_history.train_recall, label="train_recall")
+    plt.plot(epochs, validated_history.val_recall, label="val_recall")
+    plt.plot(epochs, validated_history.train_f1, label="train_f1")
+    plt.plot(epochs, validated_history.val_f1, label="val_f1")
     plt.xlabel("Epoch")
     plt.ylabel("Score")
     plt.title("Precision, Recall, F1 curves")

@@ -1,50 +1,17 @@
 #!/usr/bin/env python3
 """Compare training speed: ReLU vs Sigmoid activation (same epochs, report % difference)."""
 
-import time
-
 import numpy as np
 
-
-from mlp.model.model import MLPClassifier
-from mlp.model.training import (
-    _margin_loss_grad,
+from mlp.data.data_engineering import (
     fit_scaler_on_train_and_transform_train_val,
     fix_dataset,
     split_features_labels,
     split_train_validation,
 )
+from mlp.model.mlp_classifier import MLPClassifier
 from mlp.utils.constants import FEATURE_COLUMNS
 from mlp.utils.loader import load_dataset
-
-
-def run_training_epochs(
-    model: MLPClassifier,
-    X_train: np.ndarray,
-    y_train: np.ndarray,
-    epochs: int,
-    batch_size: int,
-    learning_rate: float,
-    optimizer: str,
-    seed: int,
-) -> float:
-    """Run a fixed number of epochs; return elapsed time in seconds."""
-    n_train = len(X_train)
-    effective_batch = batch_size if batch_size > 0 else n_train
-    rng = np.random.default_rng(seed)
-    start = time.perf_counter()
-    for epoch in range(epochs):
-        indices = rng.permutation(n_train)
-        for start_idx in range(0, n_train, effective_batch):
-            batch_idx = indices[start_idx : start_idx + effective_batch]
-            X_batch = X_train[batch_idx]
-            y_batch = y_train[batch_idx]
-            model.zero_grad()
-            logits = model.forward(X_batch)
-            d_logits = _margin_loss_grad(logits, y_batch)
-            model.backward(d_logits)
-            model.step(learning_rate=learning_rate, optimizer=optimizer)
-    return time.perf_counter() - start
 
 
 def main() -> None:
@@ -88,7 +55,7 @@ def main() -> None:
             c in df.columns for c in FEATURE_COLUMNS
         ):
             df = fix_dataset(df)
-        train_df, val_df = split_train_validation(df, split=0.2)
+        train_df, val_df = split_train_validation(df, 0.2)
         scaler_path = "/tmp/compare_activation_scaler.pkl"
         train_df, _ = fit_scaler_on_train_and_transform_train_val(
             train_df, val_df, scaler_path
@@ -108,8 +75,7 @@ def main() -> None:
         seed=args.seed,
         activation="relu",
     )
-    t_relu = run_training_epochs(
-        model_relu,
+    model_relu.fit(
         X_train,
         y_train,
         epochs=args.epochs,
@@ -117,7 +83,9 @@ def main() -> None:
         learning_rate=args.lr,
         optimizer=args.optimizer,
         seed=args.seed,
+        verbose=False,
     )
+    t_relu = model_relu.last_fit_seconds or 0.0
 
     # Sigmoid
     model_sigmoid = MLPClassifier(
@@ -127,8 +95,7 @@ def main() -> None:
         seed=args.seed,
         activation="sigmoid",
     )
-    t_sigmoid = run_training_epochs(
-        model_sigmoid,
+    model_sigmoid.fit(
         X_train,
         y_train,
         epochs=args.epochs,
@@ -136,7 +103,9 @@ def main() -> None:
         learning_rate=args.lr,
         optimizer=args.optimizer,
         seed=args.seed,
+        verbose=False,
     )
+    t_sigmoid = model_sigmoid.last_fit_seconds or 0.0
 
     # Report
     print(f"Data: {X_train.shape[0]} samples, {n_features} features")
