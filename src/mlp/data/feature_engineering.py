@@ -158,6 +158,42 @@ def plot_correlation_heatmap(
         plt.show()
 
 
+def plot_label_distribution_pie(
+    df: pd.DataFrame,
+    output_path: str | Path | None = None,
+    figsize: tuple[int, int] = (6, 6),
+) -> None:
+    """
+    Pie chart of benign (B) vs malignant (M) class distribution.
+    """
+    counts = df["label"].value_counts().reindex(["B", "M"], fill_value=0)
+    labels_display = ["Benign", "Malignant"]
+    colors = [LABEL_COLORS["B"], LABEL_COLORS["M"]]
+    sizes = counts.values
+    explode = (0.02, 0.02)
+
+    fig, ax = plt.subplots(figsize=figsize)
+    wedges, texts, autotexts = ax.pie(
+        sizes,
+        explode=explode,
+        labels=labels_display,
+        colors=colors,
+        autopct="%1.1f%%",
+        startangle=90,
+        textprops={"fontsize": 11},
+    )
+    for autotext in autotexts:
+        autotext.set_fontsize(10)
+    ax.set_title("Class distribution (Benign vs Malignant)")
+    plt.tight_layout()
+    if output_path:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(output_path, dpi=150, bbox_inches="tight")
+        plt.close()
+    else:
+        plt.show()
+
+
 def plot_pca_scatter(
     df: pd.DataFrame,
     output_path: str | Path | None = None,
@@ -213,6 +249,7 @@ def run_eda(
 
     df = _load_train_df(dataset_path)
 
+    plot_label_distribution_pie(df, output_path=output_dir / "label_distribution_pie.png")
     plot_histograms_by_label(df, output_path=output_dir / "histograms_by_label.png")
     plot_violins_by_label(df, output_path=output_dir / "violins_by_label.png")
     plot_correlation_heatmap(df, output_path=output_dir / "correlation_heatmap.png")
