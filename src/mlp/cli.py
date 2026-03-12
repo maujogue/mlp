@@ -109,20 +109,6 @@ def main_train() -> None:
         help="Random seed (default: 42)",
     )
     parser.add_argument(
-        "--model-path",
-        default=None,
-        type=str,
-        metavar="PATH",
-        help="Path where the model will be saved (default: temp/opts_timestamp/model.npz)",
-    )
-    parser.add_argument(
-        "--curves-dir",
-        default=None,
-        type=str,
-        metavar="DIR",
-        help="Directory to save learning curves (default: temp/opts_timestamp/figures)",
-    )
-    parser.add_argument(
         "--batch-size",
         default=0,
         type=int,
@@ -176,8 +162,6 @@ def main_train() -> None:
             epochs=args.epochs,
             learning_rate=args.learning_rate,
             seed=args.seed,
-            model_path=args.model_path,
-            curves_dir=args.curves_dir,
             batch_size=args.batch_size,
             optimizer=args.optimizer,
             patience=args.patience,

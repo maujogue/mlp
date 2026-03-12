@@ -417,8 +417,6 @@ def run_best_search(
             epochs=epochs,
             learning_rate=combo["learning_rate"],
             seed=seed,
-            model_path=None,
-            curves_dir=None,
             run_dir=run_dir,
             batch_size=combo["batch_size"],
             optimizer=combo["optimizer"],

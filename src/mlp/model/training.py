@@ -160,8 +160,6 @@ def train_cmd(
     epochs: int = 70,
     learning_rate: float = 0.01,
     seed: int = 42,
-    model_path: str | None = None,
-    curves_dir: str | None = None,
     run_dir: str | None = None,
     batch_size: int = 0,
     optimizer: str = "sgd",
@@ -185,10 +183,8 @@ def train_cmd(
             patience=patience,
             min_delta=min_delta,
         )
-    if curves_dir is None:
-        curves_dir = str(Path(run_dir) / "figures")
-    if model_path is None:
-        model_path = str(Path(run_dir) / "model.npz")
+    curves_dir = str(Path(run_dir) / "figures")
+    model_path = str(Path(run_dir) / "model.npz")
 
     # Load full train set (fixed, unscaled), split into train/val, then scale on train part only
     df = load_dataset(train_path)
