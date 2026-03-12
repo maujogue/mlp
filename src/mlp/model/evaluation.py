@@ -6,6 +6,7 @@ import numpy as np
 from ..data.data_engineering import fix_dataset, scale_features, split_features_labels
 from ..utils.constants import FEATURE_COLUMNS
 from ..utils.loader import load_dataset
+from .schemas import TrainingMetrics
 from .serialization import load_model
 
 
@@ -49,7 +50,7 @@ def evaluate(
     model: _ProbabilisticModel,
     X: np.ndarray,
     y: np.ndarray,
-) -> dict[str, float]:
+) -> TrainingMetrics:
     """Evaluate a model on one dataset with vectorized metrics."""
     X_arr = np.asarray(X, dtype=np.float64)
     if X_arr.ndim == 1:
@@ -59,13 +60,13 @@ def evaluate(
     loss = binary_cross_entropy_from_probabilities(y_arr, p)
     accuracy = float(np.mean((p >= 0.5) == y_arr))
     precision, recall, f1 = precision_recall_f1(y_arr, p)
-    return {
-        "loss": loss,
-        "accuracy": accuracy,
-        "precision": precision,
-        "recall": recall,
-        "f1": f1,
-    }
+    return TrainingMetrics(
+        loss=loss,
+        accuracy=accuracy,
+        precision=precision,
+        recall=recall,
+        f1=f1,
+    )
 
 
 def _load_and_preprocess_for_predict(
@@ -83,36 +84,36 @@ def _load_and_preprocess_for_predict(
 def evaluate_model_on_dataset(
     model_path_or_dir: str,
     dataset_path: str,
-) -> dict[str, float]:
+) -> TrainingMetrics:
     model_dir = (
         Path(model_path_or_dir)
         if Path(model_path_or_dir).is_dir()
         else Path(model_path_or_dir).parent
     )
-    model, _ = load_model(str(model_dir))
+    model = load_model(str(model_dir))
     scaler_path = str(model_dir / "scaler.pkl")
     X, y = _load_and_preprocess_for_predict(dataset_path, scaler_path)
-    metrics = evaluate(model, X, y)
-    return {
-        "test_loss": metrics["loss"],
-        "test_accuracy": metrics["accuracy"],
-        "test_precision": metrics["precision"],
-        "test_recall": metrics["recall"],
-        "test_f1": metrics["f1"],
-    }
+    metrics: TrainingMetrics = evaluate(model, X, y)
+    return metrics
 
 
 def evaluate_model_on_datasets(
     model_path_or_dir: str,
     dataset_paths: list[str],
-) -> dict[str, float]:
+) -> TrainingMetrics:
     if not dataset_paths:
         raise ValueError("dataset_paths must be non-empty")
-    keys = ["test_loss", "test_accuracy", "test_precision", "test_recall", "test_f1"]
-    sums: dict[str, float] = {k: 0.0 for k in keys}
+    metrics: TrainingMetrics = TrainingMetrics()
     for path in dataset_paths:
-        m = evaluate_model_on_dataset(model_path_or_dir, path)
-        for k in keys:
-            sums[k] += m[k]
-    n = len(dataset_paths)
-    return {k: sums[k] / n for k in keys}
+        m: TrainingMetrics = evaluate_model_on_dataset(model_path_or_dir, path)
+        metrics.loss += m.loss
+        metrics.accuracy += m.accuracy
+        metrics.precision += m.precision
+        metrics.recall += m.recall
+        metrics.f1 += m.f1
+    metrics.loss /= len(dataset_paths)
+    metrics.accuracy /= len(dataset_paths)
+    metrics.precision /= len(dataset_paths)
+    metrics.recall /= len(dataset_paths)
+    metrics.f1 /= len(dataset_paths)
+    return metrics

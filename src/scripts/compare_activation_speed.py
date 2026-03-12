@@ -37,6 +37,7 @@ def main() -> None:
     parser.add_argument(
         "--layers", type=int, nargs="+", default=[32, 16], help="Hidden layer sizes"
     )
+    parser.add_argument("--patience", type=int, default=0, help="Patience")
     args = parser.parse_args()
 
     # Load and prepare data (same pipeline as train_cmd)
@@ -84,6 +85,7 @@ def main() -> None:
         optimizer=args.optimizer,
         seed=args.seed,
         verbose=False,
+        patience=args.patience,
     )
     t_relu = model_relu.last_fit_seconds or 0.0
 
@@ -104,6 +106,7 @@ def main() -> None:
         optimizer=args.optimizer,
         seed=args.seed,
         verbose=False,
+        patience=args.patience,
     )
     t_sigmoid = model_sigmoid.last_fit_seconds or 0.0
 

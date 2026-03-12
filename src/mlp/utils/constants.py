@@ -50,3 +50,5 @@ LABEL_COLORS = {
     "M": "#D62728",  # Beautiful red
     "B": "#2CA02C",  # Beautiful green
 }
+
+SEED = 42

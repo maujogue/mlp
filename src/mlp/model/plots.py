@@ -5,6 +5,12 @@ import matplotlib.pyplot as plt
 from .schemas import TrainingHistory
 
 
+def _history_series(hist: TrainingHistory, metric_key: str) -> list[float]:
+    """Return a history series by alias key from the validated model."""
+    values = hist.model_dump(by_alias=True).get(metric_key, [])
+    return values if isinstance(values, list) else []
+
+
 def _run_label(folder: str) -> str:
     """Label for a run curve: basename of folder."""
     return Path(folder).name
@@ -65,7 +71,7 @@ def save_learning_curves(
 
 
 def plot_comparison(
-    histories: list[tuple[str, dict]],
+    histories: list[tuple[str, TrainingHistory]],
     save_path: str | None = None,
     plot_accuracy: bool = True,
     plot_f1: bool = False,
@@ -128,16 +134,19 @@ def plot_comparison(
         plt.figure(figsize=(8, 5))
         for folder, hist in histories:
             label_base = _run_label(folder)
-            epochs = list(range(1, len(hist.get(train_key, [])) + 1))
-            if show_train and train_key in hist:
+            train_values = _history_series(hist, train_key)
+            val_values = _history_series(hist, val_key)
+            if show_train and train_values:
+                train_epochs = list(range(1, len(train_values) + 1))
                 plt.plot(
-                    epochs,
-                    hist[train_key],
+                    train_epochs,
+                    train_values,
                     label=f"{label_base} (train)",
                     linestyle="--",
                 )
-            if show_val and val_key in hist:
-                plt.plot(epochs, hist[val_key], label=f"{label_base} (val)")
+            if show_val and val_values:
+                val_epochs = list(range(1, len(val_values) + 1))
+                plt.plot(val_epochs, val_values, label=f"{label_base} (val)")
         plt.xlabel("Epoch")
         plt.ylabel(ylabel)
         plt.title(title)

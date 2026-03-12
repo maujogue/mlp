@@ -4,7 +4,6 @@ import sys
 import re
 import time
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -35,7 +34,7 @@ def load_dataset(path: str) -> pd.DataFrame:
         sys.exit(1)
 
 
-def _sanitize(value: Any) -> str:
+def _sanitize(value: list[int] | int | float | str) -> str:
     """Turn an option value into a filesystem-safe string (no spaces, path separators)."""
     if isinstance(value, list):
         return "-".join(str(v) for v in value)

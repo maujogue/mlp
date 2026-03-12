@@ -1,11 +1,11 @@
 """Vectorized NumPy MLP for binary classification (no micrograd)."""
 
 import time
-from typing import Any
 
 import numpy as np
 
-from .schemas import TrainingHistory
+from .schemas import TrainingHistory, TrainingMetrics
+from ..utils.constants import SEED
 
 
 def _sigmoid(z: np.ndarray) -> np.ndarray:
@@ -35,7 +35,7 @@ class MLPClassifier:
         n_features: int,
         hidden_layers: list[int] | tuple[int, ...] | None = None,
         output_size: int = 2,
-        seed: int = 42,
+        seed: int = SEED,
         activation: str = "relu",
     ) -> None:
         hidden_layers = list(hidden_layers or [24, 24])
@@ -53,7 +53,7 @@ class MLPClassifier:
             raise ValueError("activation must be 'relu' or 'sigmoid'")
 
         self._layers: list[tuple[np.ndarray, np.ndarray]] = []  # weights and biases
-        self._init_weights_and_biases(n_features, hidden_layers, output_size, seed)
+        self._init_weights_and_biases()
 
         # Forward cache for backward; gradients (set by zero_grad)
         self._cache: list[tuple[np.ndarray, ...]] = []
@@ -65,11 +65,9 @@ class MLPClassifier:
         # Total duration of the last fit() call in seconds.
         self.last_fit_seconds: float | None = None
 
-    def _init_weights_and_biases(
-        self, n_features: int, hidden_layers: list[int], output_size: int, seed: int
-    ) -> None:
-        rng = np.random.default_rng(seed)
-        dims = [n_features, *hidden_layers, output_size]
+    def _init_weights_and_biases(self) -> None:
+        rng = np.random.default_rng(self.seed)
+        dims = [self.n_features, *self.hidden_layers, self.output_size]
         for i in range(len(dims) - 1):
             in_d, out_d = dims[i], dims[i + 1]
             scale = np.sqrt(2.0 / in_d) if i < len(dims) - 2 else 0.1
@@ -167,10 +165,10 @@ class MLPClassifier:
         X_val: np.ndarray | None = None,
         y_val: np.ndarray | None = None,
         epochs: int = 70,
-        learning_rate: float = 0.01,
-        batch_size: int = 0,
-        optimizer: str = "sgd",
-        patience: int = 0,
+        learning_rate: float,
+        batch_size: int,
+        optimizer: str,
+        patience: int,
         seed: int | None = None,
         verbose: bool = False,
     ) -> TrainingHistory:
@@ -196,18 +194,7 @@ class MLPClassifier:
             if len(X_val_arr) != len(y_val_arr):
                 raise ValueError("X_val and y_val must have the same length.")
 
-        history: dict[str, list[float]] = {
-            "train_loss": [],
-            "val_loss": [],
-            "train_accuracy": [],
-            "val_accuracy": [],
-            "train_precision": [],
-            "val_precision": [],
-            "train_recall": [],
-            "val_recall": [],
-            "train_f1": [],
-            "val_f1": [],
-        }
+        history: TrainingHistory = TrainingHistory()
 
         n_train = len(X_train_arr)
         effective_batch_size = batch_size if batch_size > 0 else n_train
@@ -230,40 +217,40 @@ class MLPClassifier:
                 self.backward(d_logits)
                 self.step(learning_rate=learning_rate, optimizer=optimizer)
 
-            train_metrics = evaluate(self, X_train_arr, y_train_arr)
-            history["train_loss"].append(train_metrics["loss"])
-            history["train_accuracy"].append(train_metrics["accuracy"])
-            history["train_precision"].append(train_metrics["precision"])
-            history["train_recall"].append(train_metrics["recall"])
-            history["train_f1"].append(train_metrics["f1"])
+            train_metrics: TrainingMetrics = evaluate(self, X_train_arr, y_train_arr)
+            history.train_loss.append(train_metrics.loss)
+            history.train_accuracy.append(train_metrics.accuracy)
+            history.train_precision.append(train_metrics.precision)
+            history.train_recall.append(train_metrics.recall)
+            history.train_f1.append(train_metrics.f1)
 
             if has_val and X_val_arr is not None and y_val_arr is not None:
-                val_metrics = evaluate(self, X_val_arr, y_val_arr)
-                history["val_loss"].append(val_metrics["loss"])
-                history["val_accuracy"].append(val_metrics["accuracy"])
-                history["val_precision"].append(val_metrics["precision"])
-                history["val_recall"].append(val_metrics["recall"])
-                history["val_f1"].append(val_metrics["f1"])
-                monitor_loss = val_metrics["loss"]
+                val_metrics: TrainingMetrics = evaluate(self, X_val_arr, y_val_arr)
+                history.val_loss.append(val_metrics.loss)
+                history.val_accuracy.append(val_metrics.accuracy)
+                history.val_precision.append(val_metrics.precision)
+                history.val_recall.append(val_metrics.recall)
+                history.val_f1.append(val_metrics.f1)
+                monitor_loss = val_metrics.loss
             else:
-                monitor_loss = train_metrics["loss"]
+                monitor_loss = train_metrics.loss
 
             if verbose:
                 if has_val and X_val_arr is not None and y_val_arr is not None:
                     print(
                         f"epoch {epoch:02d}/{epochs} - "
-                        f"loss: {train_metrics['loss']:.4f} - acc: {train_metrics['accuracy']:.4f} - "
-                        f"prec: {train_metrics['precision']:.4f} - rec: {train_metrics['recall']:.4f} - "
-                        f"f1: {train_metrics['f1']:.4f} - val_loss: {history['val_loss'][-1]:.4f} - "
-                        f"val_acc: {history['val_accuracy'][-1]:.4f} - val_prec: {history['val_precision'][-1]:.4f} - "
-                        f"val_rec: {history['val_recall'][-1]:.4f} - val_f1: {history['val_f1'][-1]:.4f}"
+                        f"loss: {train_metrics.loss:.4f} - acc: {train_metrics.accuracy:.4f} - "
+                        f"prec: {train_metrics.precision:.4f} - rec: {train_metrics.recall:.4f} - "
+                        f"f1: {train_metrics.f1:.4f} - val_loss: {history.val_loss[-1]:.4f} - "
+                        f"val_acc: {history.val_accuracy[-1]:.4f} - val_prec: {history.val_precision[-1]:.4f} - "
+                        f"val_rec: {history.val_recall[-1]:.4f} - val_f1: {history.val_f1[-1]:.4f}"
                     )
                 else:
                     print(
                         f"epoch {epoch:02d}/{epochs} - "
-                        f"loss: {train_metrics['loss']:.4f} - acc: {train_metrics['accuracy']:.4f} - "
-                        f"prec: {train_metrics['precision']:.4f} - rec: {train_metrics['recall']:.4f} - "
-                        f"f1: {train_metrics['f1']:.4f}"
+                        f"loss: {train_metrics.loss:.4f} - acc: {train_metrics.accuracy:.4f} - "
+                        f"prec: {train_metrics.precision:.4f} - rec: {train_metrics.recall:.4f} - "
+                        f"f1: {train_metrics.f1:.4f}"
                     )
 
             if patience > 0:
@@ -312,29 +299,3 @@ class MLPClassifier:
         if X_arr.ndim == 1:
             X_arr = X_arr.reshape(1, -1)
         return (self.predict_proba(X_arr)[:, 1] >= 0.5).astype(np.int64)
-
-    def export_state(self) -> dict[str, Any]:
-        return {
-            "n_features": self.n_features,
-            "hidden_layers": self.hidden_layers,
-            "output_size": self.output_size,
-            "seed": self.seed,
-            "activation": self._activation,
-            "layers": [{"W": W.copy(), "b": b.copy()} for W, b in self._layers],
-        }
-
-    @classmethod
-    def from_state(cls, state: dict[str, Any]) -> "MLPClassifier":
-        obj = cls(
-            n_features=int(state["n_features"]),
-            hidden_layers=list(state["hidden_layers"]),
-            output_size=int(state["output_size"]),
-            seed=int(state.get("seed", 42)),
-            activation=str(state.get("activation", "relu")),
-        )
-        for i, layer_state in enumerate(state["layers"]):
-            obj._layers[i] = (
-                np.asarray(layer_state["W"], dtype=np.float64),
-                np.asarray(layer_state["b"], dtype=np.float64),
-            )
-        return obj

@@ -26,7 +26,7 @@ def _load_and_prepare_train_val_arrays(
     val_ratio: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
-    Load train_path, fix and split into train/val, scale, and return (X_train, y_train, X_val, y_val, scaler_path).
+    Load train_path, fix and split into train/val, scale, and return (X_train, y_train, X_val, y_val).
     """
     df = load_dataset(train_path)
     if "label" not in df.columns or not all(c in df.columns for c in FEATURE_COLUMNS):
@@ -87,7 +87,7 @@ def train_cmd(
             patience=run_config.patience,
         )
     curves_dir = str(Path(run_dir) / "figures")
-    model_path = str(Path(run_dir) / "model.npz")
+    model_path = str(Path(run_dir) / "model.pkl")
 
     X_train, y_train, X_val, y_val = _load_and_prepare_train_val_arrays(
         run_config.train_path, run_config.val_ratio

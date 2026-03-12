@@ -26,7 +26,7 @@ def predict_cmd(
     dataset_path: str = "datasets/test.csv",
     output_path: str | None = None,
 ) -> None:
-    model, _ = load_model(model_path)
+    model = load_model(model_path)
     model_dir = (
         Path(model_path) if Path(model_path).is_dir() else Path(model_path).parent
     )
@@ -56,8 +56,8 @@ def predict_cmd(
     print(f"Model: {model_dir}")
     print(f"Scaler: {scaler_path}")
     print(f"Dataset: {dataset_path} (n={len(y)})")
-    print(f"binary_cross_entropy: {metrics['loss']:.6f}")
-    print(f"accuracy: {metrics['accuracy']:.6f}")
+    print(f"binary_cross_entropy: {metrics.loss:.6f}")
+    print(f"accuracy: {metrics.accuracy:.6f}")
     print(
         "(BCE is on this dataset only; it can differ from validation BCE if this is a different file.)"
     )

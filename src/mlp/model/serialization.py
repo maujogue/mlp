@@ -1,8 +1,6 @@
 import json
-import os
+import pickle
 from pathlib import Path
-
-import numpy as np
 
 from .mlp_classifier import MLPClassifier
 from .schemas import TrainingHistory, TrainingRunConfig
@@ -13,22 +11,41 @@ def save_model(
     filepath: str | Path,
 ) -> None:
     path = Path(filepath)
-    if not path.suffix or path.suffix != ".npz":
-        path = path.with_suffix(".npz")
+    if path.suffix != ".pkl":
+        path = path.with_suffix(".pkl")
     path.parent.mkdir(parents=True, exist_ok=True)
-    state = model.export_state()
-    kwargs = {
-        "n_features": np.array(state["n_features"], dtype=np.int64),
-        "output_size": np.array(state["output_size"], dtype=np.int64),
-        "seed": np.array(state["seed"], dtype=np.int64),
-        "hidden_layers": np.array(state["hidden_layers"], dtype=np.int64),
-        "num_layers": np.array(len(state["layers"]), dtype=np.int64),
-    }
-    for i, layer in enumerate(state["layers"]):
-        kwargs[f"layer_{i}_W"] = layer["W"]
-        kwargs[f"layer_{i}_b"] = layer["b"]
-    np.savez_compressed(str(path), allow_pickle=True, **kwargs)
+    with open(path, "wb") as f:
+        pickle.dump(model, f, protocol=pickle.HIGHEST_PROTOCOL)
     print(f"Model saved to {path}")
+
+
+def load_model(
+    filepath: str | Path,
+) -> MLPClassifier:
+    path_input = Path(filepath)
+    if not path_input.exists():
+        raise FileNotFoundError(f"Model file not found: {filepath}")
+
+    # Explicit .pkl file
+    if path_input.is_file() and path_input.suffix == ".pkl":
+        path = path_input
+    # Directory (e.g. run folder): look for model.pkl inside
+    elif path_input.is_dir():
+        pkl_path = path_input / "model.pkl"
+        if pkl_path.exists():
+            path = pkl_path
+        else:
+            raise FileNotFoundError(f"No model.pkl found in {filepath}")
+    else:
+        raise FileNotFoundError(
+            f"Expected path to model.pkl or a directory containing model.pkl: {filepath}"
+        )
+
+    with open(path, "rb") as f:
+        model = pickle.load(f)
+    if not isinstance(model, MLPClassifier):
+        raise TypeError(f"Loaded object from {path} is not an MLPClassifier.")
+    return model
 
 
 def save_training_history(
@@ -92,39 +109,3 @@ def load_training_history(run_folder: str) -> dict:
             run_config_data
         ).model_dump()
     return data
-
-
-def load_model(
-    filepath: str,
-) -> tuple[MLPClassifier, None]:
-    if not os.path.exists(filepath):
-        raise FileNotFoundError(f"Model file not found: {filepath}")
-
-    # Explicit .npz file
-    if filepath.endswith(".npz"):
-        path = filepath
-    # Directory (e.g. run folder): look for model.npz inside
-    elif os.path.isdir(filepath):
-        npz_path = os.path.join(filepath, "model.npz")
-        if os.path.exists(npz_path):
-            path = npz_path
-        else:
-            raise FileNotFoundError(f"No model.npz found in {filepath}")
-    else:
-        raise FileNotFoundError(
-            f"Expected path to model.npz or a directory containing model.npz: {filepath}"
-        )
-
-    data = np.load(path, allow_pickle=False)
-    num_layers = int(data["num_layers"])
-    state = {
-        "n_features": int(data["n_features"]),
-        "output_size": int(data["output_size"]),
-        "seed": int(data["seed"]),
-        "hidden_layers": list(data["hidden_layers"]),
-        "layers": [
-            {"W": data[f"layer_{i}_W"], "b": data[f"layer_{i}_b"]}
-            for i in range(num_layers)
-        ],
-    }
-    return MLPClassifier.from_state(state), None

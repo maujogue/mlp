@@ -13,7 +13,7 @@ A **multilayer perceptron (MLP)** implemented in NumPy from scratch (no autograd
 ## Requirements
 
 - **Python** ≥ 3.13, &lt; 3.14
-- **Dependencies**: `numpy`, `pandas`, `scikit-learn`, `matplotlib`, `seaborn`
+- **Dependencies**: `numpy`, `pandas`, `scikit-learn`, `matplotlib`, `seaborn`, `pydantic`
 
 ## Installation
 
@@ -56,7 +56,7 @@ Creates `train.csv` and `test.csv` in the same directory as the prepared file.
 
 ### 3. Train
 
-Train on the training CSV (with internal train/validation split). Model and learning curves are always written under `temp/<opts>_<timestamp>/` (e.g. `model.npz`, `scaler.pkl`, `figures/`).
+Train on the training CSV (with internal train/validation split). Model and learning curves are always written under `temp/<opts>_<timestamp>/` (e.g. `model.pkl`, `scaler.pkl`, `figures/`).
 
 ```bash
 mlp-train path/to/train.csv [options]
@@ -85,10 +85,10 @@ Runs a grid over layers/lr/optimizer and picks the best run. If one or more test
 
 ### 4. Predict
 
-Run inference with a saved model. Preprocessing (fix + scaler) is applied automatically.
+Run inference with a saved model. Preprocessing (fix + scaler) is applied automatically. Use a run directory (e.g. `temp/opts_xxx/`) or the path to `model.pkl` so the same scaler used at training is found.
 
 ```bash
-mlp-predict [path/to/test.csv] --model-path path/to/model.npz [--output-path predictions.csv]
+mlp-predict [path/to/test.csv] --model-path path/to/run_dir_or_model.pkl [--output-path predictions.csv]
 ```
 
 ### 5. Exploratory data analysis (EDA)
@@ -109,26 +109,41 @@ mlp-compare run_folder1 run_folder2 ... [--save path_or_dir] [--test test1.csv t
 
 Optional: `--accuracy`, `--f1`, `--recall`, `--precision`, `--val`, `--train`, `--val-train`.
 
+## Development
+
+From the project root:
+
+```bash
+make format   # ruff format
+make lint    # ruff check
+make type    # ty check
+make all     # format + lint + type
+```
+
 ## Project structure
 
 ```
 mlp/
+├── Makefile
 ├── pyproject.toml
 ├── src/
 │   └── mlp/
-│       ├── cli.py              # CLI entrypoints
+│       ├── cli.py                  # CLI entrypoints
 │       ├── data/
-│       │   ├── data_engineering.py   # prepare, split, scale, load
+│       │   ├── data_engineering.py  # prepare, split, scale, load
 │       │   └── feature_engineering.py # EDA
 │       ├── model/
-│       │   ├── model.py        # MLPClassifier (NumPy)
-│       │   ├── training.py     # train/predict commands
-│       │   ├── compare.py      # best search + run comparison
-│       │   ├── plots.py        # learning curves
-│       │   └── serialization.py # save/load model + scaler
+│       │   ├── mlp_classifier.py    # MLPClassifier (NumPy)
+│       │   ├── schemas.py           # Pydantic config & training history
+│       │   ├── training.py          # train command
+│       │   ├── predict.py           # predict command
+│       │   ├── evaluation.py        # metrics, evaluate on dataset
+│       │   ├── compare.py           # best search + run comparison
+│       │   ├── plots.py             # learning curves
+│       │   └── serialization.py    # save/load model + scaler
 │       └── utils/
-│           ├── constants.py    # feature names, labels
-│           ├── loader.py       # dataset loading
+│           ├── constants.py         # feature names, labels
+│           ├── loader.py            # dataset loading
 │           └── CustomStandardScaler.py
 └── README.md
 ```
