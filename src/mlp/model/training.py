@@ -166,11 +166,7 @@ def train_cmd(
     # batch_size=0 means full dataset per step (full-batch gradient descent)
     # patience=0 means early stopping disabled
     # val_ratio: fraction of train_path to use as validation (train is split into train/val)
-    if run_dir is not None:
-        Path(run_dir).mkdir(parents=True, exist_ok=True)
-        model_path = str(Path(run_dir) / "model.npz")
-        curves_dir = str(Path(run_dir) / "figures")
-    elif model_path is None and curves_dir is None:
+    if run_dir is None:
         run_dir = build_run_dir(
             root="temp",
             train_path=train_path,
@@ -184,10 +180,10 @@ def train_cmd(
             patience=patience,
             min_delta=min_delta,
         )
+    if curves_dir is None:
+        curves_dir =  str(Path(run_dir) / "figures")
+    if model_path is None:
         model_path = str(Path(run_dir) / "model.npz")
-        curves_dir = str(Path(run_dir) / "figures")
-    else:
-        curves_dir = curves_dir or "figures/training"
 
     # Load full train set (fixed, unscaled), split into train/val, then scale on train part only
     df = load_dataset(train_path)
@@ -399,7 +395,7 @@ def evaluate_model_on_datasets(
 
 
 def predict_cmd(
-    model_path: str | Path,
+    model_path: str,
     dataset_path: str = "datasets/test.csv",
     output_path: str | None = None,
 ) -> None:

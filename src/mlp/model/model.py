@@ -64,7 +64,7 @@ class MLPClassifier:
                 self._cache.append((out, Z))  # pre-activation input, pre-activation Z
                 out = np.maximum(0, Z) if self._activation == "relu" else _sigmoid(Z)
             else:
-                self._cache.append((out, None))
+                self._cache.append((out, np.zeros_like(Z)))
                 out = Z
         return out
 

@@ -173,7 +173,7 @@ def plot_label_distribution_pie(
     explode = (0.02, 0.02)
 
     fig, ax = plt.subplots(figsize=figsize)
-    wedges, texts, autotexts = ax.pie(
+    _, _, autotexts = ax.pie(  # type: ignore[assignment]
         sizes,
         explode=explode,
         labels=labels_display,

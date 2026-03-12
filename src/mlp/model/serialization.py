@@ -26,7 +26,7 @@ def save_model(
     for i, layer in enumerate(state["layers"]):
         kwargs[f"layer_{i}_W"] = layer["W"]
         kwargs[f"layer_{i}_b"] = layer["b"]
-    np.savez_compressed(str(path), **kwargs)
+    np.savez_compressed(str(path), allow_pickle=True, **kwargs)
     print(f"Model saved to {path}")
 
 
@@ -113,7 +113,7 @@ def load_training_history(run_folder: str) -> dict:
 
 
 def load_model(
-    filepath: str | Path,
+    filepath: str,
 ) -> tuple[MLPClassifier, None]:
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Model file not found: {filepath}")
