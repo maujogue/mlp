@@ -385,7 +385,6 @@ def run_best_search(
     val_ratio: float = 0.2,
     epochs: int = 70,
     seed: int = 42,
-    min_delta: float = 0.0,
     test_paths: list[str] | None = None,
 ) -> str:
     """Run hyperparameter grid, rank by recall (test if test_paths else val) then time; return best run dir.
@@ -421,7 +420,6 @@ def run_best_search(
             batch_size=combo["batch_size"],
             optimizer=combo["optimizer"],
             patience=combo["patience"],
-            min_delta=min_delta,
         )
 
     subdirs = [

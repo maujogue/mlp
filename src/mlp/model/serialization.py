@@ -76,7 +76,6 @@ def save_run_config(
     batch_size: int,
     optimizer: str,
     patience: int,
-    min_delta: float,
 ) -> None:
     """Write run_config.json with the options used for this run."""
     path = Path(run_dir)
@@ -91,7 +90,6 @@ def save_run_config(
         "batch_size": batch_size,
         "optimizer": optimizer,
         "patience": patience,
-        "min_delta": min_delta,
     }
     with open(path / "run_config.json", "w") as f:
         json.dump(data, f, indent=2)

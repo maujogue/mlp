@@ -128,12 +128,6 @@ def main_train() -> None:
         help="Early stopping: stop after N epochs without val_loss improvement; 0 = disabled (default: 0)",
     )
     parser.add_argument(
-        "--min-delta",
-        default=0.0,
-        type=float,
-        help="Early stopping: minimum change in val_loss to count as improvement (default: 0.0)",
-    )
-    parser.add_argument(
         "--best",
         nargs="*",
         default=None,
@@ -151,7 +145,6 @@ def main_train() -> None:
             val_ratio=args.val_ratio,
             epochs=args.epochs,
             seed=args.seed,
-            min_delta=args.min_delta,
             test_paths=test_paths,
         )
     else:
@@ -165,7 +158,6 @@ def main_train() -> None:
             batch_size=args.batch_size,
             optimizer=args.optimizer,
             patience=args.patience,
-            min_delta=args.min_delta,
         )
 
 
