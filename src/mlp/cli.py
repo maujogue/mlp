@@ -2,15 +2,40 @@ import argparse
 from .utils.constants import BLUE, RESET
 
 
-# ---------- split command ----------
-def main_split() -> None:
+# ---------- prepare-dataset command ----------
+def main_prepare_dataset() -> None:
     parser = argparse.ArgumentParser(
-        description="Split the dataset into train and test sets"
+        description="Fix the dataset (column titles, fill missing). Scaling is done during training."
     )
     parser.add_argument(
         "dataset_path",
         type=str,
-        help="Path to the dataset file",
+        help="Path to the raw dataset file",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        default="datasets/data_prepared.csv",
+        type=str,
+        help="Output path for the prepared CSV (default: datasets/data_prepared.csv)",
+    )
+    args = parser.parse_args()
+
+    from .data.data_engineering import prepare_dataset_cmd
+
+    prepare_dataset_cmd(args.dataset_path, args.output)
+    print(BLUE + "Prepared " + args.dataset_path + " -> " + args.output + RESET)
+
+
+# ---------- split command ----------
+def main_split() -> None:
+    parser = argparse.ArgumentParser(
+        description="Split a prepared dataset into train and test sets"
+    )
+    parser.add_argument(
+        "dataset_path",
+        type=str,
+        help="Path to the prepared dataset file (use mlp-prepare-dataset first)",
     )
     parser.add_argument(
         "--test-size",
@@ -27,10 +52,11 @@ def main_split() -> None:
     split_cmd(args.dataset_path, args.test_size)
     print(
         BLUE
-        + "Splitted "
+        + "Split "
         + args.dataset_path
-        + " with test size "
+        + " into train/test (test size "
         + str(args.test_size)
+        + ")"
         + RESET
     )
 
@@ -39,16 +65,16 @@ def main_split() -> None:
 def main_train() -> None:
     parser = argparse.ArgumentParser(description="Train the model on the dataset")
     parser.add_argument(
-        "--train-path",
-        default="datasets/train.csv",
+        "train_path",
+        required=True,
         type=str,
-        help="Path to training CSV (default: datasets/train.csv)",
+        help="Path to training CSV (default: datasets/train.csv). Split into train/val internally.",
     )
     parser.add_argument(
-        "--val-path",
-        default="datasets/val.csv",
-        type=str,
-        help="Path to validation CSV (default: datasets/val.csv)",
+        "--val-ratio",
+        default=0.2,
+        type=float,
+        help="Fraction of train set to use as validation (default: 0.2)",
     )
     parser.add_argument(
         "--layers",
@@ -116,25 +142,29 @@ def main_train() -> None:
     )
     parser.add_argument(
         "--best",
-        action="store_true",
-        help="Run a small hyperparameter grid and pick the best run (val precision, then fastest)",
+        nargs="*",
+        default=None,
+        metavar="TEST_CSV",
+        help="Run hyperparameter grid and pick best run. Optional: one or more test CSV paths; if given, best models are ranked by average metrics on these sets (equal weight, less bias). Displays top 5 per metric.",
     )
     args = parser.parse_args()
     from .model.compare import run_best_search
     from .model.training import train_cmd
 
-    if args.best:
+    if args.best is not None:
+        test_paths = list(args.best) if args.best else None
         run_best_search(
             train_path=args.train_path,
-            val_path=args.val_path,
+            val_ratio=args.val_ratio,
             epochs=args.epochs,
             seed=args.seed,
             min_delta=args.min_delta,
+            test_paths=test_paths,
         )
     else:
         train_cmd(
             train_path=args.train_path,
-            val_path=args.val_path,
+            val_ratio=args.val_ratio,
             layers=args.layers,
             epochs=args.epochs,
             learning_rate=args.learning_rate,
@@ -234,6 +264,15 @@ def main_compare() -> None:
         action="store_true",
         help="Plot both validation and training metrics (default)",
     )
+    parser.add_argument(
+        "--test",
+        "-t",
+        nargs="*",
+        default=None,
+        type=str,
+        metavar="TEST_CSV",
+        help="Evaluate each run's model on one or more test CSVs; metrics averaged (equal weight). Rank by test metrics and display top 5 per metric.",
+    )
     args = parser.parse_args()
     from .model.compare import compare_cmd
 
@@ -247,6 +286,7 @@ def main_compare() -> None:
         plot_val=args.val,
         plot_train=args.train,
         plot_val_train=args.val_train,
+        test_paths=args.test if args.test else None,
     )
 
 
@@ -256,15 +296,15 @@ def main_predict() -> None:
     parser.add_argument(
         "dataset_path",
         nargs="?",
-        default="datasets/val.csv",
+        default="datasets/test.csv",
         type=str,
-        help="Path to CSV used for prediction (default: datasets/val.csv)",
+        help="Path to CSV for prediction (default: datasets/test.csv). Preprocessing (fix + scaler) is applied.",
     )
     parser.add_argument(
         "--model-path",
-        default="weights/model",
+        required=True,
         type=str,
-        help="Path to saved model (default: weights/model)",
+        help="Path to saved model",
     )
     parser.add_argument(
         "--output-path",
@@ -276,7 +316,7 @@ def main_predict() -> None:
     from .model.training import predict_cmd
 
     predict_cmd(
-        dataset_path=args.dataset_path,
         model_path=args.model_path,
+        dataset_path=args.dataset_path,
         output_path=args.output_path,
     )

@@ -10,6 +10,6 @@ wheels/
 .venv
 datasets/
 figures/
-weights/
 temp/
 .DS_Store
+42_evaluation/

@@ -26,6 +26,7 @@ requires = ["uv_build>=0.10.0,<0.11.0"]
 build-backend = "uv_build"
 
 [project.scripts]
+mlp-prepare-dataset = "mlp.cli:main_prepare_dataset"
 mlp-split = "mlp.cli:main_split"
 mlp-train = "mlp.cli:main_train"
 mlp-predict = "mlp.cli:main_predict"

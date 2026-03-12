@@ -5,7 +5,12 @@ from typing import Any, Union
 
 import numpy as np
 
-from ..data.data_engineering import split_features_labels
+from ..data.data_engineering import (
+    fit_scaler_on_train_and_transform_train_val,
+    fix_dataset,
+    split_features_labels,
+    split_train_validation,
+)
 from ..utils.constants import FEATURE_COLUMNS, LABELS
 from ..utils.loader import load_dataset
 from .model import MLPClassifier
@@ -145,7 +150,7 @@ def build_run_dir(
 
 def train_cmd(
     train_path: str = "datasets/train.csv",
-    val_path: str = "datasets/val.csv",
+    val_ratio: float = 0.2,
     layers: list[int] | None = None,
     epochs: int = 70,
     learning_rate: float = 0.01,
@@ -160,6 +165,7 @@ def train_cmd(
 ) -> None:
     # batch_size=0 means full dataset per step (full-batch gradient descent)
     # patience=0 means early stopping disabled
+    # val_ratio: fraction of train_path to use as validation (train is split into train/val)
     if run_dir is not None:
         Path(run_dir).mkdir(parents=True, exist_ok=True)
         model_path = str(Path(run_dir) / "model.npz")
@@ -168,7 +174,7 @@ def train_cmd(
         run_dir = build_run_dir(
             root="temp",
             train_path=train_path,
-            val_path=val_path,
+            val_path="",
             layers=layers,
             epochs=epochs,
             learning_rate=learning_rate,
@@ -181,11 +187,24 @@ def train_cmd(
         model_path = str(Path(run_dir) / "model.npz")
         curves_dir = str(Path(run_dir) / "figures")
     else:
-        model_path = model_path or "weights/model"
         curves_dir = curves_dir or "figures/training"
 
-    X_train, y_train = _load_split_csv(train_path)
-    X_val, y_val = _load_split_csv(val_path)
+    # Load full train set (fixed, unscaled), split into train/val, then scale on train part only
+    df = load_dataset(train_path)
+    if "label" not in df.columns or not all(c in df.columns for c in FEATURE_COLUMNS):
+        df = fix_dataset(df)
+    train_df, val_df = split_train_validation(df, val_ratio)
+    scaler_path = str(Path(model_path).parent / "scaler.pkl")
+    Path(model_path).parent.mkdir(parents=True, exist_ok=True)
+    train_df, val_df = fit_scaler_on_train_and_transform_train_val(
+        train_df, val_df, scaler_path
+    )
+    X_train, y_train = split_features_labels(train_df)
+    X_val, y_val = split_features_labels(val_df)
+    X_train = X_train.to_numpy(dtype=np.float64)
+    y_train = y_train.astype(np.int64).values
+    X_val = X_val.to_numpy(dtype=np.float64)
+    y_val = y_val.astype(np.int64).values
 
     hidden = layers or [24, 24]
     model = MLPClassifier(
@@ -308,7 +327,7 @@ def train_cmd(
         save_run_config(
             run_dir,
             train_path=train_path,
-            val_path=val_path,
+            val_ratio=val_ratio,
             layers=hidden,
             epochs=epochs,
             learning_rate=learning_rate,
@@ -321,13 +340,78 @@ def train_cmd(
     print(f"Training figures saved to {curves_dir}")
 
 
+def _load_and_preprocess_for_predict(
+    dataset_path: str, scaler_path: str
+) -> tuple[np.ndarray, np.ndarray]:
+    """Load dataset, fix if needed, apply saved scaler; return (X, y) as arrays."""
+    from ..data.data_engineering import scale_features
+
+    df = load_dataset(dataset_path)
+    if "label" not in df.columns or not all(c in df.columns for c in FEATURE_COLUMNS):
+        df = fix_dataset(df)
+    df = scale_features(df, training=False, scaler_path=scaler_path)
+    X_df, y_mapped = split_features_labels(df)
+    return X_df.to_numpy(dtype=np.float64), y_mapped.astype(np.int64).values
+
+
+def evaluate_model_on_dataset(
+    model_path_or_dir: str,
+    dataset_path: str,
+) -> dict[str, float]:
+    """Load model and scaler from run dir, predict on dataset, return test metrics.
+    Used by --best with a test set to rank runs by held-out test metrics (less bias).
+    """
+    model_dir = (
+        Path(model_path_or_dir)
+        if Path(model_path_or_dir).is_dir()
+        else Path(model_path_or_dir).parent
+    )
+    model, _ = load_model(str(model_dir))
+    scaler_path = str(model_dir / "scaler.pkl")
+    X, y = _load_and_preprocess_for_predict(dataset_path, scaler_path)
+    bce, accuracy, precision, recall, f1 = _evaluate_dataset(model, X, y)
+    return {
+        "test_loss": bce,
+        "test_accuracy": accuracy,
+        "test_precision": precision,
+        "test_recall": recall,
+        "test_f1": f1,
+    }
+
+
+def evaluate_model_on_datasets(
+    model_path_or_dir: str,
+    dataset_paths: list[str],
+) -> dict[str, float]:
+    """Evaluate model on multiple datasets and return metrics averaged with equal weight.
+    Used when multiple test CSVs are given: best model is the one with best average BCE (and avg recall, etc.).
+    """
+    if not dataset_paths:
+        raise ValueError("dataset_paths must be non-empty")
+    keys = ["test_loss", "test_accuracy", "test_precision", "test_recall", "test_f1"]
+    sums: dict[str, float] = {k: 0.0 for k in keys}
+    for path in dataset_paths:
+        m = evaluate_model_on_dataset(model_path_or_dir, path)
+        for k in keys:
+            sums[k] += m[k]
+    n = len(dataset_paths)
+    return {k: sums[k] / n for k in keys}
+
+
 def predict_cmd(
-    dataset_path: str = "datasets/val.csv",
-    model_path: str = "weights/model",
+    model_path: str | Path,
+    dataset_path: str = "datasets/test.csv",
     output_path: str | None = None,
 ) -> None:
     model, _ = load_model(model_path)
-    X, y = _load_split_csv(dataset_path)
+    model_dir = Path(model_path) if Path(model_path).is_dir() else Path(model_path).parent
+    scaler_path = str(model_dir / "scaler.pkl")
+    if not Path(scaler_path).exists():
+        raise FileNotFoundError(
+            f"Scaler not found at {scaler_path}. Use the full run directory as --model-path "
+            "(e.g. temp/best_xxx/run_name) so the same scaler used at training is used here."
+        )
+    X, y = _load_and_preprocess_for_predict(dataset_path, scaler_path)
 
     p_arr = model.predict_proba(X)[:, 1]
     p_positive = p_arr.tolist()
@@ -345,5 +429,9 @@ def predict_cmd(
 
     bce = _binary_cross_entropy_from_probabilities(y, p_arr)
     accuracy = float(np.mean((p_arr >= 0.5) == np.asarray(y)))
+    print(f"Model: {model_dir}")
+    print(f"Scaler: {scaler_path}")
+    print(f"Dataset: {dataset_path} (n={len(y)})")
     print(f"binary_cross_entropy: {bce:.6f}")
     print(f"accuracy: {accuracy:.6f}")
+    print("(BCE is on this dataset only; it can differ from validation BCE if this is a different file.)")
