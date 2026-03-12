@@ -3,6 +3,7 @@ import os
 import pickle
 from pathlib import Path
 
+
 class CustomStandardScaler:
     """
     Custom standard scaler that scales the data to have a mean of 0 and a

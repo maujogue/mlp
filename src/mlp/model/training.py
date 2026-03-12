@@ -15,7 +15,12 @@ from ..utils.constants import FEATURE_COLUMNS, LABELS
 from ..utils.loader import load_dataset
 from .model import MLPClassifier
 from .plots import save_learning_curves
-from .serialization import load_model, save_model, save_run_config, save_training_history
+from .serialization import (
+    load_model,
+    save_model,
+    save_run_config,
+    save_training_history,
+)
 
 INDEX_TO_LABEL = {v: k for k, v in LABELS.items()}
 
@@ -181,7 +186,7 @@ def train_cmd(
             min_delta=min_delta,
         )
     if curves_dir is None:
-        curves_dir =  str(Path(run_dir) / "figures")
+        curves_dir = str(Path(run_dir) / "figures")
     if model_path is None:
         model_path = str(Path(run_dir) / "model.npz")
 
@@ -282,7 +287,9 @@ def train_cmd(
         )
 
         if patience > 0 and epochs_no_improve >= patience:
-            print(f"Early stopping at epoch {epoch} (no improvement for {patience} epochs).")
+            print(
+                f"Early stopping at epoch {epoch} (no improvement for {patience} epochs)."
+            )
             break
 
     if best_weights is not None:
@@ -400,7 +407,9 @@ def predict_cmd(
     output_path: str | None = None,
 ) -> None:
     model, _ = load_model(model_path)
-    model_dir = Path(model_path) if Path(model_path).is_dir() else Path(model_path).parent
+    model_dir = (
+        Path(model_path) if Path(model_path).is_dir() else Path(model_path).parent
+    )
     scaler_path = str(model_dir / "scaler.pkl")
     if not Path(scaler_path).exists():
         raise FileNotFoundError(
@@ -430,4 +439,6 @@ def predict_cmd(
     print(f"Dataset: {dataset_path} (n={len(y)})")
     print(f"binary_cross_entropy: {bce:.6f}")
     print(f"accuracy: {accuracy:.6f}")
-    print("(BCE is on this dataset only; it can differ from validation BCE if this is a different file.)")
+    print(
+        "(BCE is on this dataset only; it can differ from validation BCE if this is a different file.)"
+    )

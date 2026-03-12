@@ -249,7 +249,9 @@ def run_eda(
 
     df = _load_train_df(dataset_path)
 
-    plot_label_distribution_pie(df, output_path=output_dir / "label_distribution_pie.png")
+    plot_label_distribution_pie(
+        df, output_path=output_dir / "label_distribution_pie.png"
+    )
     plot_histograms_by_label(df, output_path=output_dir / "histograms_by_label.png")
     plot_violins_by_label(df, output_path=output_dir / "violins_by_label.png")
     plot_correlation_heatmap(df, output_path=output_dir / "correlation_heatmap.png")

@@ -127,9 +127,7 @@ def load_model(
         if os.path.exists(npz_path):
             path = npz_path
         else:
-            raise FileNotFoundError(
-                f"No model.npz found in {filepath}"
-            )
+            raise FileNotFoundError(f"No model.npz found in {filepath}")
     else:
         raise FileNotFoundError(
             f"Expected path to model.npz or a directory containing model.npz: {filepath}"

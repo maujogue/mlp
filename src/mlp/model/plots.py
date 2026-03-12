@@ -60,7 +60,9 @@ def save_learning_curves(
     plt.title("Precision, Recall, F1 curves")
     plt.legend()
     plt.tight_layout()
-    plt.savefig(output_path / "precision_recall_f1_curve.png", dpi=150, bbox_inches="tight")
+    plt.savefig(
+        output_path / "precision_recall_f1_curve.png", dpi=150, bbox_inches="tight"
+    )
     plt.close()
 
 
@@ -83,19 +85,37 @@ def plot_comparison(
 
     metrics: list[tuple[str, str, str, str]] = []  # (title, ylabel, train_key, val_key)
     if plot_accuracy:
-        metrics.append(("Accuracy comparison", "Accuracy", "history_train_acc", "history_val_acc"))
+        metrics.append(
+            ("Accuracy comparison", "Accuracy", "history_train_acc", "history_val_acc")
+        )
     if plot_f1:
         metrics.append(("F1 comparison", "F1", "history_train_f1", "history_val_f1"))
     if plot_recall:
-        metrics.append(("Recall comparison", "Recall", "history_train_recall", "history_val_recall"))
+        metrics.append(
+            (
+                "Recall comparison",
+                "Recall",
+                "history_train_recall",
+                "history_val_recall",
+            )
+        )
     if plot_precision:
-        metrics.append(("Precision comparison", "Precision", "history_train_precision", "history_val_precision"))
+        metrics.append(
+            (
+                "Precision comparison",
+                "Precision",
+                "history_train_precision",
+                "history_val_precision",
+            )
+        )
 
     if not metrics:
         return
 
     save_dir: Path | None = None
-    save_first_file: Path | None = None  # when user passes a file path, save first figure there
+    save_first_file: Path | None = (
+        None  # when user passes a file path, save first figure there
+    )
     if save_path:
         p = Path(save_path)
         if p.suffix and p.suffix.lower() in (".png", ".jpg", ".jpeg", ".pdf"):
@@ -112,7 +132,12 @@ def plot_comparison(
             label_base = _run_label(folder)
             epochs = list(range(1, len(hist.get(train_key, [])) + 1))
             if show_train and train_key in hist:
-                plt.plot(epochs, hist[train_key], label=f"{label_base} (train)", linestyle="--")
+                plt.plot(
+                    epochs,
+                    hist[train_key],
+                    label=f"{label_base} (train)",
+                    linestyle="--",
+                )
             if show_val and val_key in hist:
                 plt.plot(epochs, hist[val_key], label=f"{label_base} (val)")
         plt.xlabel("Epoch")
