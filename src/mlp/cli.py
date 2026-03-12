@@ -1,4 +1,6 @@
 import argparse
+from pathlib import Path
+
 from .utils.constants import BLUE, RESET
 
 
@@ -15,16 +17,21 @@ def main_prepare_dataset() -> None:
     parser.add_argument(
         "--output",
         "-o",
-        default="datasets/data_prepared.csv",
+        default=None,
         type=str,
-        help="Output path for the prepared CSV (default: datasets/data_prepared.csv)",
+        help="Output path for the prepared CSV (default: next to input with _prepared suffix)",
     )
     args = parser.parse_args()
 
+    output_path = args.output
+    if output_path is None:
+        p = Path(args.dataset_path)
+        output_path = str(p.parent / f"{p.stem}_prepared{p.suffix}")
+
     from .data.data_engineering import prepare_dataset_cmd
 
-    prepare_dataset_cmd(args.dataset_path, args.output)
-    print(BLUE + "Prepared " + args.dataset_path + " -> " + args.output + RESET)
+    prepare_dataset_cmd(args.dataset_path, output_path)
+    print(BLUE + "Prepared " + args.dataset_path + " -> " + output_path + RESET)
 
 
 # ---------- split command ----------
