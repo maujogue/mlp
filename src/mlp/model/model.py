@@ -5,8 +5,13 @@ from typing import Any
 import numpy as np
 
 
+def _sigmoid(z: np.ndarray) -> np.ndarray:
+    """Numerically stable sigmoid."""
+    return np.where(z >= 0, 1.0 / (1.0 + np.exp(-z)), np.exp(z) / (1.0 + np.exp(z)))
+
+
 class MLPClassifier:
-    """NumPy MLP: batch forward/backward, ReLU hidden, 2-class output."""
+    """NumPy MLP: batch forward/backward, ReLU or sigmoid hidden, 2-class output."""
 
     def __init__(
         self,
@@ -14,6 +19,7 @@ class MLPClassifier:
         hidden_layers: list[int] | tuple[int, ...] | None = None,
         output_size: int = 2,
         seed: int = 42,
+        activation: str = "relu",
     ) -> None:
         hidden_layers = list(hidden_layers or [24, 24])
         if len(hidden_layers) < 2:
@@ -25,6 +31,9 @@ class MLPClassifier:
         self.hidden_layers = hidden_layers
         self.output_size = output_size
         self.seed = seed
+        self._activation = activation.lower()
+        if self._activation not in ("relu", "sigmoid"):
+            raise ValueError("activation must be 'relu' or 'sigmoid'")
 
         rng = np.random.default_rng(seed)
         dims = [n_features, *hidden_layers, output_size]
@@ -53,7 +62,7 @@ class MLPClassifier:
             Z = out @ W + b  # (B, out_d)
             if i < len(self._layers) - 1:
                 self._cache.append((out, Z))  # pre-activation input, pre-activation Z
-                out = np.maximum(0, Z)  # ReLU
+                out = np.maximum(0, Z) if self._activation == "relu" else _sigmoid(Z)
             else:
                 self._cache.append((out, None))
                 out = Z
@@ -68,7 +77,11 @@ class MLPClassifier:
             if i == len(self._layers) - 1:
                 d_Z = d_out
             else:
-                d_Z = d_out * (Z > 0).astype(np.float64)  # ReLU derivative
+                if self._activation == "relu":
+                    d_Z = d_out * (Z > 0).astype(np.float64)
+                else:
+                    s = _sigmoid(Z)
+                    d_Z = d_out * s * (1.0 - s)  # sigmoid derivative
             # d_out was d_L/d_(output of this layer). d_Z = d_L/d_Z.
             # Z = X_in @ W + b  =>  dW = X_in.T @ d_Z, db = sum(d_Z), d_X_in = d_Z @ W.T
             self._grad_W[i] = X_in.T @ d_Z
@@ -129,7 +142,7 @@ class MLPClassifier:
         for i, (W, b) in enumerate(self._layers):
             Z = out @ W + b
             if i < len(self._layers) - 1:
-                out = np.maximum(0, Z)
+                out = np.maximum(0, Z) if self._activation == "relu" else _sigmoid(Z)
             else:
                 out = Z
         return out
@@ -155,6 +168,7 @@ class MLPClassifier:
             "hidden_layers": self.hidden_layers,
             "output_size": self.output_size,
             "seed": self.seed,
+            "activation": self._activation,
             "layers": [{"W": W.copy(), "b": b.copy()} for W, b in self._layers],
         }
 
@@ -165,6 +179,7 @@ class MLPClassifier:
             hidden_layers=list(state["hidden_layers"]),
             output_size=int(state["output_size"]),
             seed=int(state.get("seed", 42)),
+            activation=str(state.get("activation", "relu")),
         )
         for i, layer_state in enumerate(state["layers"]):
             obj._layers[i] = (
