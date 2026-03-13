@@ -4,7 +4,7 @@ import time
 
 import numpy as np
 
-from .schemas import TrainingHistory, TrainingMetrics
+from .schemas import TrainingHistory, TrainingMetrics, TrainingRunConfig
 from ..utils.constants import SEED
 
 
@@ -235,23 +235,22 @@ class MLPClassifier:
             else:
                 monitor_loss = train_metrics.loss
 
-            if verbose:
-                if has_val and X_val_arr is not None and y_val_arr is not None:
-                    print(
-                        f"epoch {epoch:02d}/{epochs} - "
-                        f"loss: {train_metrics.loss:.4f} - acc: {train_metrics.accuracy:.4f} - "
-                        f"prec: {train_metrics.precision:.4f} - rec: {train_metrics.recall:.4f} - "
-                        f"f1: {train_metrics.f1:.4f} - val_loss: {history.val_loss[-1]:.4f} - "
-                        f"val_acc: {history.val_accuracy[-1]:.4f} - val_prec: {history.val_precision[-1]:.4f} - "
-                        f"val_rec: {history.val_recall[-1]:.4f} - val_f1: {history.val_f1[-1]:.4f}"
-                    )
-                else:
-                    print(
-                        f"epoch {epoch:02d}/{epochs} - "
-                        f"loss: {train_metrics.loss:.4f} - acc: {train_metrics.accuracy:.4f} - "
-                        f"prec: {train_metrics.precision:.4f} - rec: {train_metrics.recall:.4f} - "
-                        f"f1: {train_metrics.f1:.4f}"
-                    )
+            if has_val and X_val_arr is not None and y_val_arr is not None:
+                print(
+                    f"epoch {epoch:02d}/{epochs} - "
+                    f"loss: {train_metrics.loss:.4f} - acc: {train_metrics.accuracy:.4f} - "
+                    f"prec: {train_metrics.precision:.4f} - rec: {train_metrics.recall:.4f} - "
+                    f"f1: {train_metrics.f1:.4f} - val_loss: {history.val_loss[-1]:.4f} - "
+                    f"val_acc: {history.val_accuracy[-1]:.4f} - val_prec: {history.val_precision[-1]:.4f} - "
+                    f"val_rec: {history.val_recall[-1]:.4f} - val_f1: {history.val_f1[-1]:.4f}"
+                )
+            else:
+                print(
+                    f"epoch {epoch:02d}/{epochs} - "
+                    f"loss: {train_metrics.loss:.4f} - acc: {train_metrics.accuracy:.4f} - "
+                    f"prec: {train_metrics.precision:.4f} - rec: {train_metrics.recall:.4f} - "
+                    f"f1: {train_metrics.f1:.4f}"
+                )
 
             if patience > 0:
                 if monitor_loss < best_loss:
@@ -261,10 +260,9 @@ class MLPClassifier:
                 else:
                     epochs_no_improve += 1
                     if epochs_no_improve >= patience:
-                        if verbose:
-                            print(
-                                f"Early stopping at epoch {epoch} (no improvement for {patience} epochs)."
-                            )
+                        print(
+                            f"Early stopping at epoch {epoch} (no improvement for {patience} epochs)."
+                        )
                         break
 
         if best_weights is not None:

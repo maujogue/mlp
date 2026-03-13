@@ -84,7 +84,6 @@ def main() -> None:
         learning_rate=args.lr,
         optimizer=args.optimizer,
         seed=args.seed,
-        verbose=False,
         patience=args.patience,
     )
     t_relu = model_relu.last_fit_seconds or 0.0
@@ -105,7 +104,6 @@ def main() -> None:
         learning_rate=args.lr,
         optimizer=args.optimizer,
         seed=args.seed,
-        verbose=False,
         patience=args.patience,
     )
     t_sigmoid = model_sigmoid.last_fit_seconds or 0.0

@@ -75,7 +75,6 @@ def main_train() -> None:
     parser = argparse.ArgumentParser(description="Train the model on the dataset")
     parser.add_argument(
         "train_path",
-        required=True,
         type=str,
         help="Path to training CSV (default: datasets/train.csv). Split into train/val internally.",
     )
@@ -137,46 +136,30 @@ def main_train() -> None:
         help="Run hyperparameter grid and pick best run. Optional: one or more test CSV paths; if given, best models are ranked by average metrics on these sets (equal weight, less bias). Displays top 5 per metric.",
     )
     args = parser.parse_args()
+
     from .model.compare import run_best_search
     from .model.schemas import TrainingRunConfig
     from .model.training import train_cmd
 
+    run_config = TrainingRunConfig(
+        train_path=args.train_path,
+        val_ratio=args.val_ratio,
+        layers=args.layers,
+        epochs=args.epochs,
+        learning_rate=args.learning_rate,
+        seed=args.seed,
+        batch_size=args.batch_size,
+        optimizer=args.optimizer,
+        patience=args.patience,
+        test_paths=list(args.best) if args.best else [],
+    )
     if args.best is not None:
-        test_paths = list(args.best) if args.best else None
         run_best_search(
-            train_path=args.train_path,
-            val_ratio=args.val_ratio,
-            epochs=args.epochs,
-            seed=args.seed,
-            test_paths=test_paths,
+            run_config=run_config,
         )
     else:
-        try:
-            validated = TrainingRunConfig.model_validate(
-                {
-                    "train_path": args.train_path,
-                    "val_ratio": args.val_ratio,
-                    "layers": args.layers,
-                    "epochs": args.epochs,
-                    "learning_rate": args.learning_rate,
-                    "seed": args.seed,
-                    "batch_size": args.batch_size,
-                    "optimizer": args.optimizer,
-                    "patience": args.patience,
-                }
-            )
-        except ValidationError as exc:
-            parser.error(str(exc))
         train_cmd(
-            train_path=validated.train_path,
-            val_ratio=validated.val_ratio,
-            layers=validated.layers,
-            epochs=validated.epochs,
-            learning_rate=validated.learning_rate,
-            seed=validated.seed,
-            batch_size=validated.batch_size,
-            optimizer=validated.optimizer,
-            patience=validated.patience,
+            run_config=run_config,
         )
 
 

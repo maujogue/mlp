@@ -11,7 +11,7 @@ from .training import (
 )
 from ..utils.loader import _sanitize
 from .evaluation import evaluate_model_on_dataset, evaluate_model_on_datasets
-from .schemas import TrainingHistory, TrainingMetrics
+from .schemas import TrainingHistory, TrainingMetrics, TrainingRunConfig
 
 TOP_N = 5  # Number of best runs to display per metric
 
@@ -398,21 +398,16 @@ def compare_cmd(
 
 
 def run_best_search(
-    train_path: str = "datasets/train.csv",
-    val_ratio: float = 0.2,
-    epochs: int = 70,
-    seed: int = 42,
-    test_paths: list[str] | None = None,
+    run_config: TrainingRunConfig,
 ) -> str:
     """Run hyperparameter grid, rank by recall (test if test_paths else val) then time; return best run dir.
-    Epochs are scaled per combo so total gradient updates ≈ base epochs (full-batch equivalent).
     When test_paths is provided, each trained model is evaluated on those datasets; metrics are averaged
     (equal weight) and best models are chosen by test metrics. Displays top TOP_N runs per metric.
     """
     from ..data.data_engineering import fix_dataset
     from ..utils.loader import load_dataset
 
-    df = load_dataset(train_path)
+    df = load_dataset(run_config.train_path)
     if "label" not in df.columns:
         df = fix_dataset(df)
     timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
@@ -423,19 +418,20 @@ def run_best_search(
         run_dir = parent / _combo_run_name(combo)
         run_dir = str(run_dir)
         print(
-            f"[best] Run {i + 1}/{len(BEST_GRID)}: {Path(run_dir).name} (epochs={epochs})"
+            f"[best] Run {i + 1}/{len(BEST_GRID)}: {Path(run_dir).name} (epochs={run_config.epochs})"
         )
         train_cmd(
-            train_path=train_path,
-            val_ratio=val_ratio,
-            layers=combo["layers"],
-            epochs=epochs,
-            learning_rate=combo["learning_rate"],
-            seed=seed,
-            run_dir=run_dir,
-            batch_size=combo["batch_size"],
-            optimizer=combo["optimizer"],
-            patience=combo["patience"],
+            run_config=TrainingRunConfig(
+                train_path=run_config.train_path,
+                val_ratio=run_config.val_ratio,
+                layers=combo["layers"],
+                epochs=run_config.epochs,
+                learning_rate=combo["learning_rate"],
+                seed=run_config.seed,
+                batch_size=combo["batch_size"],
+                optimizer=combo["optimizer"],
+                patience=combo["patience"],
+            ),
         )
 
     subdirs = [
@@ -447,12 +443,12 @@ def run_best_search(
         raise RuntimeError("No completed runs with history.json found")
     histories = load_histories(subdirs)
 
-    if test_paths:
-        n = len(test_paths)
+    if run_config.test_paths:
+        n = len(run_config.test_paths)
         print(
-            f"[best] Evaluating all runs on {n} test set(s) (equal-weight average): {', '.join(test_paths)}"
+            f"[best] Evaluating all runs on {n} test set(s) (equal-weight average): {', '.join(run_config.test_paths)}"
         )
-        _add_test_metrics_to_histories(histories, test_paths)
+        _add_test_metrics_to_histories(histories, run_config.test_paths)
         print("[best] Ranking by test metrics (less bias than validation).")
     print()
     print_best_summary(histories)

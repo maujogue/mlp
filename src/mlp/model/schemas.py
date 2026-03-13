@@ -21,10 +21,11 @@ class TrainingRunConfig(BaseModel):
     layers: list[int] = Field(default=[], min_length=2)
     epochs: int = Field(default=0, gt=0)
     learning_rate: float = Field(default=0.0, gt=0.0)
-    seed: int
+    seed: int = Field(default=42)
     batch_size: int = Field(ge=0)
     optimizer: Literal["sgd", "rmsprop"] = "sgd"
     patience: int = Field(ge=0)
+    test_paths: list[str] = Field(default=[])
 
 
 class TrainingHistory(BaseModel):
