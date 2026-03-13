@@ -70,7 +70,16 @@ class MLPClassifier:
         dims = [self.n_features, *self.hidden_layers, self.output_size]
         for i in range(len(dims) - 1):
             in_d, out_d = dims[i], dims[i + 1]
-            scale = np.sqrt(2.0 / in_d) if i < len(dims) - 2 else 0.1
+            if i < len(dims) - 2:
+                # Match hidden-layer initialization to activation to stabilize gradients.
+                if self._activation == "relu":
+                    # Kaiming/He normal initialization.
+                    scale = np.sqrt(2.0 / in_d)
+                else:
+                    # Xavier/Glorot normal initialization.
+                    scale = np.sqrt(2.0 / (in_d + out_d))
+            else:
+                scale = 0.1
             W = rng.standard_normal((in_d, out_d)).astype(np.float64) * scale
             b = np.zeros(out_d, dtype=np.float64)
             self._layers.append((W, b))
@@ -164,13 +173,7 @@ class MLPClassifier:
         *,
         X_val: np.ndarray | None = None,
         y_val: np.ndarray | None = None,
-        epochs: int = 70,
-        learning_rate: float,
-        batch_size: int,
-        optimizer: str,
-        patience: int,
-        seed: int | None = None,
-        verbose: bool = False,
+        run_config: TrainingRunConfig,
     ) -> TrainingHistory:
         """Train the model and return epoch-wise metrics history."""
         from .evaluation import evaluate
@@ -197,15 +200,15 @@ class MLPClassifier:
         history: TrainingHistory = TrainingHistory()
 
         n_train = len(X_train_arr)
-        effective_batch_size = batch_size if batch_size > 0 else n_train
-        rng_seed = self.seed if seed is None else seed
+        effective_batch_size = run_config.batch_size if run_config.batch_size > 0 else n_train
+        rng_seed = self.seed if run_config.seed is None else run_config.seed
         rng = np.random.default_rng(rng_seed)
 
         best_loss = np.inf
         epochs_no_improve = 0
         best_weights: list[tuple[np.ndarray, np.ndarray]] | None = None
 
-        for epoch in range(1, epochs + 1):
+        for epoch in range(1, run_config.epochs + 1):
             indices = rng.permutation(n_train)
             for start in range(0, n_train, effective_batch_size):
                 batch_idx = indices[start : start + effective_batch_size]
@@ -215,7 +218,7 @@ class MLPClassifier:
                 logits = self.forward(X_batch)
                 d_logits = margin_loss_grad(logits, y_batch)
                 self.backward(d_logits)
-                self.step(learning_rate=learning_rate, optimizer=optimizer)
+                self.step(learning_rate=run_config.learning_rate, optimizer=run_config.optimizer)
 
             train_metrics: TrainingMetrics = evaluate(self, X_train_arr, y_train_arr)
             history.train_loss.append(train_metrics.loss)
@@ -237,7 +240,7 @@ class MLPClassifier:
 
             if has_val and X_val_arr is not None and y_val_arr is not None:
                 print(
-                    f"epoch {epoch:02d}/{epochs} - "
+                    f"epoch {epoch:02d}/{run_config.epochs} - "
                     f"loss: {train_metrics.loss:.4f} - acc: {train_metrics.accuracy:.4f} - "
                     f"prec: {train_metrics.precision:.4f} - rec: {train_metrics.recall:.4f} - "
                     f"f1: {train_metrics.f1:.4f} - val_loss: {history.val_loss[-1]:.4f} - "
@@ -246,22 +249,22 @@ class MLPClassifier:
                 )
             else:
                 print(
-                    f"epoch {epoch:02d}/{epochs} - "
+                    f"epoch {epoch:02d}/{run_config.epochs} - "
                     f"loss: {train_metrics.loss:.4f} - acc: {train_metrics.accuracy:.4f} - "
                     f"prec: {train_metrics.precision:.4f} - rec: {train_metrics.recall:.4f} - "
                     f"f1: {train_metrics.f1:.4f}"
                 )
 
-            if patience > 0:
+            if run_config.patience > 0:
                 if monitor_loss < best_loss:
                     best_loss = monitor_loss
                     epochs_no_improve = 0
                     best_weights = [(W.copy(), b.copy()) for W, b in self.parameters()]
                 else:
                     epochs_no_improve += 1
-                    if epochs_no_improve >= patience:
+                    if epochs_no_improve >= run_config.patience:
                         print(
-                            f"Early stopping at epoch {epoch} (no improvement for {patience} epochs)."
+                            f"Early stopping at epoch {epoch} (no improvement for {run_config.patience} epochs)."
                         )
                         break
 
