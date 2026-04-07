@@ -1,5 +1,10 @@
 .PHONY: lint format type
 
+all:
+	make format
+	make lint
+	make type
+
 lint:
 	ruff check src/
 
@@ -8,9 +13,3 @@ format:
 
 type:
 	ty check
-
-all:
-	make format
-	make lint
-	make type
-	

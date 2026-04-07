@@ -22,9 +22,9 @@ from .serialization import (
 
 
 def _load_and_prepare_train_val_arrays(
-    train_path: str,
+    train_path: Path,
     val_ratio: float,
-    run_dir: str,
+    run_dir: Path,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Load train_path, fix and split into train/val, scale, and return (X_train, y_train, X_val, y_val).
@@ -33,7 +33,7 @@ def _load_and_prepare_train_val_arrays(
     if "label" not in df.columns or not all(c in df.columns for c in FEATURE_COLUMNS):
         df = fix_dataset(df)
     train_df, val_df = split_train_validation(df, val_ratio)
-    scaler_path = str(Path(run_dir) / "scaler.pkl")
+    scaler_path: Path = run_dir / Path("scaler.pkl")
     train_df, val_df = fit_scaler_on_train_and_transform_train_val(
         train_df, val_df, scaler_path
     )
@@ -52,12 +52,14 @@ def train_cmd(
     # batch_size=0 means full dataset per step (full-batch gradient descent)
     # patience=0 means early stopping disabled
     # val_ratio: fraction of train_path to use as validation (train is split into train/val)
-    run_dir = build_run_dir(run_config)
-    curves_dir = str(Path(run_dir) / "figures")
-    model_path = str(Path(run_dir) / "model.pkl")
+    run_dir: Path = build_run_dir(run_config)
+    curves_dir: Path = run_dir / "figures"
+    model_path: Path = run_dir / "model.pkl"
 
     X_train, y_train, X_val, y_val = _load_and_prepare_train_val_arrays(
-        run_config.train_path, run_config.val_ratio, run_dir
+        train_path=run_config.train_path,
+        val_ratio=run_config.val_ratio,
+        run_dir=run_dir,
     )
 
     model = MLPClassifier(
@@ -73,14 +75,8 @@ def train_cmd(
         y_train,
         X_val=X_val,
         y_val=y_val,
-        epochs=run_config.epochs,
-        learning_rate=run_config.learning_rate,
-        batch_size=run_config.batch_size,
-        optimizer=run_config.optimizer,
-        patience=run_config.patience,
-        seed=run_config.seed,
+        run_config=run_config,
     )
-    history = TrainingHistory.model_validate(history)
 
     elapsed_seconds = time.perf_counter() - start_time
     save_model(model, model_path)

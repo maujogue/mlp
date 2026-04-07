@@ -17,7 +17,7 @@ from sklearn.preprocessing import StandardScaler
 from ..utils.constants import FEATURE_COLUMNS, LABEL_COLORS
 
 
-def _load_train_df(dataset_path: str) -> pd.DataFrame:
+def _load_train_df(dataset_path: Path) -> pd.DataFrame:
     """Load training CSV with label + feature columns."""
     df = pd.read_csv(dataset_path)
     if "label" not in df.columns or not all(c in df.columns for c in FEATURE_COLUMNS):
@@ -29,7 +29,7 @@ def _load_train_df(dataset_path: str) -> pd.DataFrame:
 
 def plot_histograms_by_label(
     df: pd.DataFrame,
-    output_path: str | Path | None = None,
+    output_path: Path | None = None,
     figsize: tuple[int, int] = (18, 24),
     bins: int = 25,
 ) -> None:
@@ -77,7 +77,7 @@ def plot_histograms_by_label(
 
 def plot_violins_by_label(
     df: pd.DataFrame,
-    output_path: str | Path | None = None,
+    output_path: Path | None = None,
     figsize: tuple[int, int] = (18, 24),
 ) -> None:
     """
@@ -124,7 +124,7 @@ def plot_violins_by_label(
 
 def plot_correlation_heatmap(
     df: pd.DataFrame,
-    output_path: str | Path | None = None,
+    output_path: Path | None = None,
     figsize: tuple[int, int] = (14, 12),
 ) -> None:
     """
@@ -160,7 +160,7 @@ def plot_correlation_heatmap(
 
 def plot_label_distribution_pie(
     df: pd.DataFrame,
-    output_path: str | Path | None = None,
+    output_path: Path | None = None,
     figsize: tuple[int, int] = (6, 6),
 ) -> None:
     """
@@ -196,7 +196,7 @@ def plot_label_distribution_pie(
 
 def plot_pca_scatter(
     df: pd.DataFrame,
-    output_path: str | Path | None = None,
+    output_path: Path | None = None,
     figsize: tuple[int, int] = (8, 6),
 ) -> None:
     """
@@ -238,13 +238,12 @@ def plot_pca_scatter(
 
 
 def run_eda(
-    dataset_path: str = "datasets/train.csv",
-    output_dir: str | Path = "figures/eda",
+    dataset_path: Path = Path("datasets/train.csv"),
+    output_dir: Path = Path("figures/eda"),
 ) -> None:
     """
     Run full EDA pipeline and save all figures to output_dir.
     """
-    output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     df = _load_train_df(dataset_path)

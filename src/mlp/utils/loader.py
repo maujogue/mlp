@@ -5,14 +5,13 @@ import re
 import time
 from pathlib import Path
 
-from ..utils.constants import DEFAULT_RUN_DIR
 from ..model.schemas import TrainingRunConfig
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
-def load_dataset(path: str) -> pd.DataFrame:
+def load_dataset(path: Path) -> pd.DataFrame:
     try:
         df = pd.read_csv(path)
 
@@ -48,7 +47,7 @@ def _sanitize(value: list[int] | int | float | str) -> str:
 
 def build_run_dir(
     run_config: TrainingRunConfig,
-) -> str:
+) -> Path:
     """Build a run directory name: root/option1-value1_option2-value2_<timestamp>."""
     parts = []
     if run_config.train_path:
@@ -57,11 +56,13 @@ def build_run_dir(
     parts.append(f"epochs-{run_config.epochs}")
     parts.append(f"lr-{_sanitize(run_config.learning_rate)}")
     parts.append(f"seed-{run_config.seed}")
-    parts.append(f"batch-{run_config.batch_size if run_config.batch_size > 0 else 'full'}")
+    parts.append(
+        f"batch-{run_config.batch_size if run_config.batch_size > 0 else 'full'}"
+    )
     parts.append(f"optim-{run_config.optimizer}")
     parts.append(f"patience-{run_config.patience}")
     timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
     name = "_".join(parts) + "_" + timestamp
-    run_dir = Path(DEFAULT_RUN_DIR) / name
+    run_dir: Path = run_config.parent_dir / Path(name)
     run_dir.mkdir(parents=True, exist_ok=True)
-    return str(run_dir)
+    return run_dir

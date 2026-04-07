@@ -1,5 +1,4 @@
 import pandas as pd
-import os
 import pickle
 from pathlib import Path
 
@@ -27,21 +26,18 @@ class CustomStandardScaler:
         return X * self.scale_ + self.mean_
 
 
-def save_scaler(scaler, filepath: str | Path):
-    weights_dir = os.path.dirname(filepath)
-    if not os.path.exists(weights_dir):
-        os.makedirs(weights_dir)
+def save_scaler(scaler, filepath: Path):
+    filepath.parent.mkdir(parents=True, exist_ok=True)
 
     with open(filepath, "wb") as f:
         pickle.dump(scaler, f)
     print(f"Scaler saved to {filepath}")
 
 
-def load_scaler(filepath: str | Path):
-    if not os.path.exists(filepath):
+def load_scaler(filepath: Path):
+    if not filepath.exists():
         raise FileNotFoundError(f"Scaler file not found: {filepath}")
 
     with open(filepath, "rb") as f:
         scaler = pickle.load(f)
-    print(f"Scaler loaded from {filepath}")
     return scaler

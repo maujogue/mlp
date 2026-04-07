@@ -4,12 +4,13 @@ import json
 import time
 from pathlib import Path
 
+from mlp.utils.constants import DEFAULT_RUN_DIR
+
 from .plots import plot_comparison
 from .serialization import load_training_history
 from .training import (
     train_cmd,
 )
-from ..utils.loader import _sanitize
 from .evaluation import evaluate_model_on_dataset, evaluate_model_on_datasets
 from .schemas import TrainingHistory, TrainingMetrics, TrainingRunConfig
 
@@ -23,9 +24,8 @@ _TEST_RECALL = "history_test_recall"
 _TEST_PRECISION = "history_test_precision"
 _TEST_F1 = "history_test_f1"
 _TEST_LOSS = "history_test_loss"
-_ELAPSED = "elapsed_seconds"
 
-RunHistory = tuple[str, TrainingHistory, float]
+RunHistory = tuple[Path, TrainingHistory]
 
 
 def _history_series(hist: TrainingHistory, metric_key: str) -> list[float]:
@@ -62,20 +62,11 @@ def _make_grid() -> list[dict]:
 BEST_GRID = _make_grid()
 
 
-def _combo_run_name(combo: dict) -> str:
-    """Short directory name for a grid combo."""
-    batch = "full" if combo["batch_size"] == 0 else combo["batch_size"]
-    return (
-        f"layers-{_sanitize(combo['layers'])}_lr-{_sanitize(combo['learning_rate'])}_"
-        f"batch-{batch}_optim-{combo['optimizer']}_patience-{combo['patience']}"
-    )
-
-
-def expand_run_folders(run_folders: list[str]) -> list[str]:
+def expand_run_folders(run_folders: list[Path]) -> list[Path]:
     """Expand parent dirs: if a path has no history.json, use its subdirs that do."""
-    out: list[str] = []
+    out: list[Path] = []
     for folder in run_folders:
-        p = Path(folder)
+        p = folder
         if not p.is_dir():
             out.append(folder)
             continue
@@ -84,38 +75,33 @@ def expand_run_folders(run_folders: list[str]) -> list[str]:
             continue
         for sub in sorted(p.iterdir()):
             if sub.is_dir() and (sub / "history.json").exists():
-                out.append(str(sub))
+                out.append(sub)
     return out
 
 
-def load_histories(folders: list[str]) -> list[RunHistory]:
+def load_histories(folders: list[Path]) -> list[RunHistory]:
     """Load and validate history.json for each folder. Raises FileNotFoundError if any missing."""
     histories: list[RunHistory] = []
     for folder in folders:
-        raw_history = load_training_history(folder)
-        history = TrainingHistory.model_validate(raw_history)
-        elapsed_raw = raw_history.get(_ELAPSED)
-        elapsed = float(elapsed_raw) if elapsed_raw is not None else float("inf")
-        histories.append((folder, history, elapsed))
+        history = load_training_history(folder)
+        histories.append((folder, history))
     return histories
 
 
-def _metric_and_time(
-    hist: TrainingHistory, metric_key: str, elapsed: float
-) -> tuple[float, float]:
+def _metric_and_time(hist: TrainingHistory, metric_key: str) -> tuple[float, float]:
     """(max val/test metric, elapsed_seconds). Used for ranking (higher is better)."""
     values = _history_series(hist, metric_key)
     best = max(values) if values else 0.0
-    return best, elapsed
+    return best, hist.elapsed_seconds
 
 
 def _loss_and_time(
-    hist: TrainingHistory, elapsed: float, loss_key: str = _VAL_LOSS
+    hist: TrainingHistory, loss_key: str = _VAL_LOSS
 ) -> tuple[float, float]:
     """(min loss, elapsed_seconds). Used for ranking BCE (lower is better)."""
     values = _history_series(hist, loss_key)
     best = min(values) if values else float("inf")
-    return best, elapsed
+    return best, hist.elapsed_seconds
 
 
 def _use_test_metrics(histories: list[RunHistory]) -> bool:
@@ -125,17 +111,16 @@ def _use_test_metrics(histories: list[RunHistory]) -> bool:
 
 def rank_runs_by_metric(
     histories: list[RunHistory], metric_key: str
-) -> list[tuple[str, float, float]]:
+) -> list[tuple[Path, float, float]]:
     """Sort by given metric desc, then elapsed asc. Returns [(folder, value, elapsed), ...]."""
     ranked = [
-        (folder, *_metric_and_time(hist, metric_key, elapsed))
-        for folder, hist, elapsed in histories
+        (folder, *_metric_and_time(hist, metric_key)) for folder, hist in histories
     ]
     ranked.sort(key=lambda x: (-x[1], x[2]))
     return ranked
 
 
-def rank_runs(histories: list[RunHistory]) -> list[tuple[str, float, float]]:
+def rank_runs(histories: list[RunHistory]) -> list[tuple[Path, float, float]]:
     """Sort by recall (test if available else val) desc, then elapsed asc."""
     key = _TEST_RECALL if _use_test_metrics(histories) else _VAL_RECALL
     return rank_runs_by_metric(histories, key)
@@ -143,38 +128,27 @@ def rank_runs(histories: list[RunHistory]) -> list[tuple[str, float, float]]:
 
 def rank_runs_by_val_loss(
     histories: list[RunHistory],
-) -> list[tuple[str, float, float]]:
+) -> list[tuple[Path, float, float]]:
     """Sort by loss (test if available else val) asc, then elapsed asc."""
     loss_key = _TEST_LOSS if _use_test_metrics(histories) else _VAL_LOSS
-    ranked = [
-        (folder, *_loss_and_time(hist, elapsed, loss_key))
-        for folder, hist, elapsed in histories
-    ]
+    ranked = [(folder, *_loss_and_time(hist, loss_key)) for folder, hist in histories]
     ranked.sort(key=lambda x: (x[1], x[2]))
     return ranked
 
 
 def _best_per_metric(
     histories: list[RunHistory],
-) -> dict[str, tuple[str, float, float]]:
+) -> dict[str, tuple[Path, float, float]]:
     """Return best (folder, value, elapsed) for each of recall, precision, F1, loss (BCE)."""
     use_test = _use_test_metrics(histories)
     rec_key = _TEST_RECALL if use_test else _VAL_RECALL
     prec_key = _TEST_PRECISION if use_test else _VAL_PRECISION
     f1_key = _TEST_F1 if use_test else _VAL_F1
     return {
-        "recall": rank_runs_by_metric(histories, rec_key)[:1][0]
-        if histories
-        else ("", 0.0, float("inf")),
-        "precision": rank_runs_by_metric(histories, prec_key)[:1][0]
-        if histories
-        else ("", 0.0, float("inf")),
-        "f1": rank_runs_by_metric(histories, f1_key)[:1][0]
-        if histories
-        else ("", 0.0, float("inf")),
-        "val_loss": rank_runs_by_val_loss(histories)[:1][0]
-        if histories
-        else ("", float("inf"), float("inf")),
+        "recall": rank_runs_by_metric(histories, rec_key)[:1][0],
+        "precision": rank_runs_by_metric(histories, prec_key)[:1][0],
+        "f1": rank_runs_by_metric(histories, f1_key)[:1][0],
+        "val_loss": rank_runs_by_val_loss(histories)[:1][0],
     }
 
 
@@ -233,13 +207,13 @@ def print_best_summary(histories: list[RunHistory]) -> None:
 def _all_runs_flat(histories: list[RunHistory]) -> list[dict[str, str | float]]:
     """Build list of run_dir + val (and test if present) metrics + elapsed for each run."""
     out: list[dict[str, str | float]] = []
-    for folder, hist, elapsed in histories:
-        r, _ = _metric_and_time(hist, _VAL_RECALL, elapsed)
-        p, _ = _metric_and_time(hist, _VAL_PRECISION, elapsed)
-        f, _ = _metric_and_time(hist, _VAL_F1, elapsed)
-        loss, _ = _loss_and_time(hist, elapsed, _VAL_LOSS)
+    for folder, hist in histories:
+        r, elapsed = _metric_and_time(hist, _VAL_RECALL)
+        p, _ = _metric_and_time(hist, _VAL_PRECISION)
+        f, _ = _metric_and_time(hist, _VAL_F1)
+        loss, _ = _loss_and_time(hist, _VAL_LOSS)
         row = {
-            "run_dir": folder,
+            "run_dir": str(folder),
             "val_recall": r,
             "val_precision": p,
             "val_f1": f,
@@ -247,10 +221,10 @@ def _all_runs_flat(histories: list[RunHistory]) -> list[dict[str, str | float]]:
             "elapsed_seconds": elapsed,
         }
         if hist.test_recall:
-            tr, _ = _metric_and_time(hist, _TEST_RECALL, elapsed)
-            tp, _ = _metric_and_time(hist, _TEST_PRECISION, elapsed)
-            tf, _ = _metric_and_time(hist, _TEST_F1, elapsed)
-            tloss, _ = _loss_and_time(hist, elapsed, _TEST_LOSS)
+            tr, _ = _metric_and_time(hist, _TEST_RECALL)
+            tp, _ = _metric_and_time(hist, _TEST_PRECISION)
+            tf, _ = _metric_and_time(hist, _TEST_F1)
+            tloss, _ = _loss_and_time(hist, _TEST_LOSS)
             row["test_recall"] = tr
             row["test_precision"] = tp
             row["test_f1"] = tf
@@ -259,17 +233,21 @@ def _all_runs_flat(histories: list[RunHistory]) -> list[dict[str, str | float]]:
     return out
 
 
-def _top_n_flat(ranked: list[tuple[str, float, float]], value_key: str) -> list[dict]:
+def _top_n_flat(
+    ranked: list[tuple[Path, float, float]], value_key: str
+) -> list[dict[str, str | float]]:
     """Build list of {run_dir, value_key, elapsed_seconds} for top TOP_N."""
     out = []
     for folder, value, elapsed in ranked[:TOP_N]:
-        out.append({"run_dir": folder, value_key: value, "elapsed_seconds": elapsed})
+        out.append(
+            {"run_dir": str(folder), value_key: value, "elapsed_seconds": elapsed}
+        )
     return out
 
 
-def write_best_summary(parent_dir: str | Path, histories: list[RunHistory]) -> None:
+def write_best_summary(parent_dir: Path, histories: list[RunHistory]) -> None:
     """Write best_summary.json with best run, top TOP_N per metric, and all_runs."""
-    path = Path(parent_dir)
+    path = parent_dir
     path.mkdir(parents=True, exist_ok=True)
     best = _best_per_metric(histories)
     use_test = _use_test_metrics(histories)
@@ -282,7 +260,7 @@ def write_best_summary(parent_dir: str | Path, histories: list[RunHistory]) -> N
     f1_key_rank = _TEST_F1 if use_test else _VAL_F1
     summary = {
         "best_by_recall": {
-            "run_dir": best["recall"][0],
+            "run_dir": str(best["recall"][0]),
             rec_key: best["recall"][1],
             "elapsed_seconds": best["recall"][2],
         },
@@ -290,7 +268,7 @@ def write_best_summary(parent_dir: str | Path, histories: list[RunHistory]) -> N
             rank_runs_by_metric(histories, rec_key_rank), rec_key
         ),
         "best_by_precision": {
-            "run_dir": best["precision"][0],
+            "run_dir": str(best["precision"][0]),
             prec_key: best["precision"][1],
             "elapsed_seconds": best["precision"][2],
         },
@@ -298,13 +276,13 @@ def write_best_summary(parent_dir: str | Path, histories: list[RunHistory]) -> N
             rank_runs_by_metric(histories, prec_key_rank), prec_key
         ),
         "best_by_f1": {
-            "run_dir": best["f1"][0],
+            "run_dir": str(best["f1"][0]),
             f1_key: best["f1"][1],
             "elapsed_seconds": best["f1"][2],
         },
         "top_5_by_f1": _top_n_flat(rank_runs_by_metric(histories, f1_key_rank), f1_key),
         "best_by_val_loss": {
-            "run_dir": best["val_loss"][0],
+            "run_dir": str(best["val_loss"][0]),
             loss_key: best["val_loss"][1],
             "elapsed_seconds": best["val_loss"][2],
         },
@@ -318,7 +296,7 @@ def write_best_summary(parent_dir: str | Path, histories: list[RunHistory]) -> N
 
 def _histories_to_plot_by_bce(
     histories: list[RunHistory],
-) -> list[tuple[str, TrainingHistory]]:
+) -> list[tuple[Path, TrainingHistory]]:
     """Select 5 best BCE, 1 middle, 1 worst for comparison plots (no duplicates)."""
     ranked = rank_runs_by_val_loss(histories)
     n = len(ranked)
@@ -330,18 +308,18 @@ def _histories_to_plot_by_bce(
     folders_ordered = list(
         dict.fromkeys(best_5_folders + [mid_folder] + [worst_folder])
     )
-    folder_to_hist: dict[str, TrainingHistory] = {
-        folder: history for folder, history, _ in histories
+    folder_to_hist: dict[Path, TrainingHistory] = {
+        folder: history for folder, history in histories
     }
     return [(f, folder_to_hist[f]) for f in folders_ordered if f in folder_to_hist]
 
 
 def _add_test_metrics_to_histories(
     histories: list[RunHistory],
-    test_paths: list[str],
+    test_paths: list[Path],
 ) -> None:
     """Evaluate each run on test_paths (equal-weight average if multiple) and merge into histories (in-place)."""
-    for folder, history, _ in histories:
+    for folder, history in histories:
         if len(test_paths) == 1:
             metrics: TrainingMetrics = evaluate_model_on_dataset(folder, test_paths[0])
         else:
@@ -354,8 +332,8 @@ def _add_test_metrics_to_histories(
 
 
 def compare_cmd(
-    run_folders: list[str],
-    save_path: str | None = None,
+    run_folders: list[Path],
+    save_path: Path | None = None,
     plot_accuracy: bool = True,
     plot_f1: bool = False,
     plot_recall: bool = False,
@@ -363,7 +341,7 @@ def compare_cmd(
     plot_val: bool = False,
     plot_train: bool = False,
     plot_val_train: bool = False,
-    test_paths: list[str] | None = None,
+    test_paths: list[Path] | None = None,
 ) -> None:
     """Load run histories, optionally evaluate on test set(s), plot comparison curves, print best run summary.
     When test_paths is provided, each run's model is evaluated on those datasets; metrics are averaged (equal weight)
@@ -378,7 +356,7 @@ def compare_cmd(
     if test_paths:
         n = len(test_paths)
         print(
-            f"Evaluating {len(histories)} run(s) on {n} test set(s) (equal-weight average): {', '.join(test_paths)}"
+            f"Evaluating {len(histories)} run(s) on {n} test set(s) (equal-weight average): {', '.join(str(p) for p in test_paths)}"
         )
         _add_test_metrics_to_histories(histories, test_paths)
         print("Ranking by test metrics.")
@@ -399,7 +377,7 @@ def compare_cmd(
 
 def run_best_search(
     run_config: TrainingRunConfig,
-) -> str:
+) -> Path:
     """Run hyperparameter grid, rank by recall (test if test_paths else val) then time; return best run dir.
     When test_paths is provided, each trained model is evaluated on those datasets; metrics are averaged
     (equal weight) and best models are chosen by test metrics. Displays top TOP_N runs per metric.
@@ -411,14 +389,14 @@ def run_best_search(
     if "label" not in df.columns:
         df = fix_dataset(df)
     timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
-    parent = Path("temp") / f"best_{timestamp}"
-    parent.mkdir(parents=True, exist_ok=True)
+    parent_dir = Path(DEFAULT_RUN_DIR) / Path(
+        f"best_{run_config.train_path.stem}_{timestamp}"
+    )
+    parent_dir.mkdir(parents=True, exist_ok=True)
 
     for i, combo in enumerate(BEST_GRID):
-        run_dir = parent / _combo_run_name(combo)
-        run_dir = str(run_dir)
         print(
-            f"[best] Run {i + 1}/{len(BEST_GRID)}: {Path(run_dir).name} (epochs={run_config.epochs})"
+            f"[best] Run {i + 1}/{len(BEST_GRID)}: {Path(parent_dir).name} (epochs={run_config.epochs})"
         )
         train_cmd(
             run_config=TrainingRunConfig(
@@ -431,12 +409,13 @@ def run_best_search(
                 batch_size=combo["batch_size"],
                 optimizer=combo["optimizer"],
                 patience=combo["patience"],
+                parent_dir=parent_dir,
             ),
         )
 
     subdirs = [
-        str(s)
-        for s in sorted(parent.iterdir())
+        s
+        for s in sorted(Path(parent_dir).iterdir())
         if s.is_dir() and (s / "history.json").exists()
     ]
     if not subdirs:
@@ -446,12 +425,12 @@ def run_best_search(
     if run_config.test_paths:
         n = len(run_config.test_paths)
         print(
-            f"[best] Evaluating all runs on {n} test set(s) (equal-weight average): {', '.join(run_config.test_paths)}"
+            f"[best] Evaluating all runs on {n} test set(s) (equal-weight average): {', '.join(str(p) for p in run_config.test_paths)}"
         )
         _add_test_metrics_to_histories(histories, run_config.test_paths)
         print("[best] Ranking by test metrics (less bias than validation).")
     print()
     print_best_summary(histories)
-    write_best_summary(parent, histories)
+    write_best_summary(parent_dir, histories)
     # Return best by recall for backward compatibility
     return rank_runs(histories)[0][0]

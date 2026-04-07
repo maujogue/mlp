@@ -1,6 +1,9 @@
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from mlp.utils.constants import DEFAULT_RUN_DIR
 
 
 class TrainingMetrics(BaseModel):
@@ -16,16 +19,17 @@ class TrainingMetrics(BaseModel):
 class TrainingRunConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    train_path: str = Field(default="", min_length=1)
+    train_path: Path
     val_ratio: float = Field(ge=0.0, lt=1.0)
     layers: list[int] = Field(default=[], min_length=2)
     epochs: int = Field(default=0, gt=0)
     learning_rate: float = Field(default=0.0, gt=0.0)
     seed: int = Field(default=42)
     batch_size: int = Field(ge=0)
-    optimizer: Literal["sgd", "rmsprop"] = "sgd"
-    patience: int = Field(ge=0)
-    test_paths: list[str] = Field(default=[])
+    optimizer: Literal["sgd", "rmsprop"] = Field(default="rmsprop")
+    patience: int = Field(default=0, ge=0)
+    test_paths: list[Path] = Field(default_factory=list)
+    parent_dir: Path = Field(default=Path(DEFAULT_RUN_DIR))
 
 
 class TrainingHistory(BaseModel):
@@ -92,3 +96,5 @@ class TrainingHistory(BaseModel):
         default_factory=list,
         alias="history_test_f1",
     )
+    elapsed_seconds: float = Field(default=float("inf"), ge=0.0)
+    epochs_ran: int | None = Field(default=None, ge=0)

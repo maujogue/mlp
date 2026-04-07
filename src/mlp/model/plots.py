@@ -11,28 +11,23 @@ def _history_series(hist: TrainingHistory, metric_key: str) -> list[float]:
     return values if isinstance(values, list) else []
 
 
-def _run_label(folder: str) -> str:
+def _run_label(folder: Path) -> str:
     """Label for a run curve: basename of folder."""
-    return Path(folder).name
+    return folder.name
 
 
 def save_learning_curves(
-    history: TrainingHistory | dict[str, list[float]],
-    output_dir: str = "figures/training",
+    history: TrainingHistory,
+    output_dir: Path = Path("figures/training"),
 ) -> None:
-    validated_history = (
-        history
-        if isinstance(history, TrainingHistory)
-        else TrainingHistory.model_validate(history)
-    )
-    output_path = Path(output_dir)
+    output_path = output_dir
     output_path.mkdir(parents=True, exist_ok=True)
 
-    epochs = list(range(1, len(validated_history.train_loss) + 1))
+    epochs = list(range(1, len(history.train_loss) + 1))
 
     plt.figure(figsize=(8, 5))
-    plt.plot(epochs, validated_history.train_loss, label="train_loss")
-    plt.plot(epochs, validated_history.val_loss, label="val_loss")
+    plt.plot(epochs, history.train_loss, label="train_loss")
+    plt.plot(epochs, history.val_loss, label="val_loss")
     plt.xlabel("Epoch")
     plt.ylabel("Binary cross-entropy")
     plt.title("Loss curves")
@@ -42,8 +37,8 @@ def save_learning_curves(
     plt.close()
 
     plt.figure(figsize=(8, 5))
-    plt.plot(epochs, validated_history.train_accuracy, label="train_acc")
-    plt.plot(epochs, validated_history.val_accuracy, label="val_acc")
+    plt.plot(epochs, history.train_accuracy, label="train_acc")
+    plt.plot(epochs, history.val_accuracy, label="val_acc")
     plt.xlabel("Epoch")
     plt.ylabel("Accuracy")
     plt.title("Accuracy curves")
@@ -53,12 +48,12 @@ def save_learning_curves(
     plt.close()
 
     plt.figure(figsize=(8, 5))
-    plt.plot(epochs, validated_history.train_precision, label="train_precision")
-    plt.plot(epochs, validated_history.val_precision, label="val_precision")
-    plt.plot(epochs, validated_history.train_recall, label="train_recall")
-    plt.plot(epochs, validated_history.val_recall, label="val_recall")
-    plt.plot(epochs, validated_history.train_f1, label="train_f1")
-    plt.plot(epochs, validated_history.val_f1, label="val_f1")
+    plt.plot(epochs, history.train_precision, label="train_precision")
+    plt.plot(epochs, history.val_precision, label="val_precision")
+    plt.plot(epochs, history.train_recall, label="train_recall")
+    plt.plot(epochs, history.val_recall, label="val_recall")
+    plt.plot(epochs, history.train_f1, label="train_f1")
+    plt.plot(epochs, history.val_f1, label="val_f1")
     plt.xlabel("Epoch")
     plt.ylabel("Score")
     plt.title("Precision, Recall, F1 curves")
@@ -71,8 +66,8 @@ def save_learning_curves(
 
 
 def plot_comparison(
-    histories: list[tuple[str, TrainingHistory]],
-    save_path: str | None = None,
+    histories: list[tuple[Path, TrainingHistory]],
+    save_path: Path | None = None,
     plot_accuracy: bool = True,
     plot_f1: bool = False,
     plot_recall: bool = False,
@@ -117,23 +112,16 @@ def plot_comparison(
         return
 
     save_dir: Path | None = None
-    save_first_file: Path | None = (
-        None  # when user passes a file path, save first figure there
-    )
+    save_first_file: Path | None = None
     if save_path:
-        p = Path(save_path)
-        if p.suffix and p.suffix.lower() in (".png", ".jpg", ".jpeg", ".pdf"):
-            save_dir = p.parent
-            save_dir.mkdir(parents=True, exist_ok=True)
-            save_first_file = p
-        else:
-            save_dir = p
-            save_dir.mkdir(parents=True, exist_ok=True)
+        save_dir = save_path.parent
+        save_dir.mkdir(parents=True, exist_ok=True)
+        save_first_file = save_path
 
     for idx, (title, ylabel, train_key, val_key) in enumerate(metrics):
         plt.figure(figsize=(8, 5))
-        for folder, hist in histories:
-            label_base = _run_label(folder)
+        for run_dir, hist in histories:
+            label_base = _run_label(run_dir)
             train_values = _history_series(hist, train_key)
             val_values = _history_series(hist, val_key)
             if show_train and train_values:

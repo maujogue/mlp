@@ -8,7 +8,7 @@ from .evaluation import evaluate
 
 
 def _load_and_preprocess_for_predict(
-    dataset_path: str, scaler_path: str
+    dataset_path: Path, scaler_path: Path
 ) -> tuple[np.ndarray, np.ndarray]:
     """Load dataset, fix if needed, apply saved scaler; return (X, y) as arrays."""
     from ..data.data_engineering import scale_features
@@ -22,16 +22,16 @@ def _load_and_preprocess_for_predict(
 
 
 def predict_cmd(
-    model_path: str,
-    dataset_path: str = "datasets/test.csv",
-    output_path: str | None = None,
+    model_path: Path,
+    dataset_path: Path = Path("datasets/test.csv"),
+    output_path: Path | None = None,
 ) -> None:
     model = load_model(model_path)
     model_dir = (
         Path(model_path) if Path(model_path).is_dir() else Path(model_path).parent
     )
-    scaler_path = str(model_dir / "scaler.pkl")
-    if not Path(scaler_path).exists():
+    scaler_path: Path = model_dir / Path("scaler.pkl")
+    if not scaler_path.exists():
         raise FileNotFoundError(
             f"Scaler not found at {scaler_path}. Use the full run directory as --model-path "
             "(e.g. temp/best_xxx/run_name) so the same scaler used at training is used here."

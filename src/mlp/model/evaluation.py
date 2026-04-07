@@ -70,8 +70,8 @@ def evaluate(
 
 
 def _load_and_preprocess_for_predict(
-    dataset_path: str,
-    scaler_path: str,
+    dataset_path: Path,
+    scaler_path: Path,
 ) -> tuple[np.ndarray, np.ndarray]:
     df = load_dataset(dataset_path)
     if "label" not in df.columns or not all(c in df.columns for c in FEATURE_COLUMNS):
@@ -82,24 +82,24 @@ def _load_and_preprocess_for_predict(
 
 
 def evaluate_model_on_dataset(
-    model_path_or_dir: str,
-    dataset_path: str,
+    model_path_or_dir: Path,
+    dataset_path: Path,
 ) -> TrainingMetrics:
     model_dir = (
         Path(model_path_or_dir)
         if Path(model_path_or_dir).is_dir()
         else Path(model_path_or_dir).parent
     )
-    model = load_model(str(model_dir))
-    scaler_path = str(model_dir / "scaler.pkl")
+    model = load_model(model_dir)
+    scaler_path = model_dir / "scaler.pkl"
     X, y = _load_and_preprocess_for_predict(dataset_path, scaler_path)
     metrics: TrainingMetrics = evaluate(model, X, y)
     return metrics
 
 
 def evaluate_model_on_datasets(
-    model_path_or_dir: str,
-    dataset_paths: list[str],
+    model_path_or_dir: Path,
+    dataset_paths: list[Path],
 ) -> TrainingMetrics:
     if not dataset_paths:
         raise ValueError("dataset_paths must be non-empty")

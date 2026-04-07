@@ -13,17 +13,16 @@ def _sigmoid(z: np.ndarray) -> np.ndarray:
     return np.where(z >= 0, 1.0 / (1.0 + np.exp(-z)), np.exp(z) / (1.0 + np.exp(z)))
 
 
-def margin_loss_grad(logits: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """Gradient of margin loss w.r.t. logits (B, 2)."""
+def softmax_cross_entropy_grad(logits: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Gradient of softmax cross-entropy w.r.t. logits (B, 2)."""
     batch_size = logits.shape[0]
     y_arr = np.asarray(y, dtype=np.intp)
-    correct = logits[np.arange(batch_size), y_arr]
-    wrong = logits[np.arange(batch_size), 1 - y_arr]
-    margins = np.maximum(0.0, 1.0 + wrong - correct)
-    mask = (margins > 0).astype(np.float64)
-    d_logits = np.zeros_like(logits)
-    d_logits[np.arange(batch_size), y_arr] = -mask / batch_size
-    d_logits[np.arange(batch_size), 1 - y_arr] = mask / batch_size
+    shift = logits.max(axis=1, keepdims=True)
+    exp = np.exp(logits - shift)
+    proba = exp / exp.sum(axis=1, keepdims=True)
+    d_logits = proba
+    d_logits[np.arange(batch_size), y_arr] -= 1.0
+    d_logits /= batch_size
     return d_logits
 
 
@@ -200,7 +199,9 @@ class MLPClassifier:
         history: TrainingHistory = TrainingHistory()
 
         n_train = len(X_train_arr)
-        effective_batch_size = run_config.batch_size if run_config.batch_size > 0 else n_train
+        effective_batch_size = (
+            run_config.batch_size if run_config.batch_size > 0 else n_train
+        )
         rng_seed = self.seed if run_config.seed is None else run_config.seed
         rng = np.random.default_rng(rng_seed)
 
@@ -216,9 +217,12 @@ class MLPClassifier:
                 y_batch = y_train_arr[batch_idx]
                 self.zero_grad()
                 logits = self.forward(X_batch)
-                d_logits = margin_loss_grad(logits, y_batch)
+                d_logits = softmax_cross_entropy_grad(logits, y_batch)
                 self.backward(d_logits)
-                self.step(learning_rate=run_config.learning_rate, optimizer=run_config.optimizer)
+                self.step(
+                    learning_rate=run_config.learning_rate,
+                    optimizer=run_config.optimizer,
+                )
 
             train_metrics: TrainingMetrics = evaluate(self, X_train_arr, y_train_arr)
             history.train_loss.append(train_metrics.loss)

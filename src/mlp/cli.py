@@ -1,8 +1,6 @@
 import argparse
 from pathlib import Path
 
-from pydantic import ValidationError
-
 from .utils.constants import BLUE, RESET
 
 
@@ -13,27 +11,27 @@ def main_prepare_dataset() -> None:
     )
     parser.add_argument(
         "dataset_path",
-        type=str,
+        type=Path,
         help="Path to the raw dataset file",
     )
     parser.add_argument(
         "--output",
         "-o",
         default=None,
-        type=str,
+        type=Path,
         help="Output path for the prepared CSV (default: next to input with _prepared suffix)",
     )
     args = parser.parse_args()
 
     output_path = args.output
     if output_path is None:
-        p = Path(args.dataset_path)
-        output_path = str(p.parent / f"{p.stem}_prepared{p.suffix}")
+        p: Path = args.dataset_path
+        output_path = p.parent / f"{p.stem}_prepared{p.suffix}"
 
     from .data.data_engineering import prepare_dataset_cmd
 
     prepare_dataset_cmd(args.dataset_path, output_path)
-    print(BLUE + "Prepared " + args.dataset_path + " -> " + output_path + RESET)
+    print(BLUE + f"Prepared {args.dataset_path} -> {output_path}" + RESET)
 
 
 # ---------- split command ----------
@@ -43,7 +41,7 @@ def main_split() -> None:
     )
     parser.add_argument(
         "dataset_path",
-        type=str,
+        type=Path,
         help="Path to the prepared dataset file (use mlp-prepare-dataset first)",
     )
     parser.add_argument(
@@ -61,11 +59,7 @@ def main_split() -> None:
     split_cmd(args.dataset_path, args.test_size)
     print(
         BLUE
-        + "Split "
-        + args.dataset_path
-        + " into train/test (test size "
-        + str(args.test_size)
-        + ")"
+        + f"Split {args.dataset_path} into train/test (test size {args.test_size})"
         + RESET
     )
 
@@ -75,7 +69,7 @@ def main_train() -> None:
     parser = argparse.ArgumentParser(description="Train the model on the dataset")
     parser.add_argument(
         "train_path",
-        type=str,
+        type=Path,
         help="Path to training CSV (default: datasets/train.csv). Split into train/val internally.",
     )
     parser.add_argument(
@@ -87,7 +81,7 @@ def main_train() -> None:
     parser.add_argument(
         "--layers",
         nargs="+",
-        default=[24, 24],
+        default=[24, 24, 12],
         type=int,
         help="Hidden layer sizes (default: 24 24)",
     )
@@ -99,7 +93,7 @@ def main_train() -> None:
     )
     parser.add_argument(
         "--learning-rate",
-        default=0.03,
+        default=0.01,
         type=float,
         help="Learning rate (default: 0.03)",
     )
@@ -117,14 +111,14 @@ def main_train() -> None:
     )
     parser.add_argument(
         "--optimizer",
-        default="sgd",
+        default="rmsprop",
         choices=("sgd", "rmsprop"),
         type=str,
-        help="Optimizer: sgd or rmsprop (default: sgd)",
+        help="Optimizer: sgd or rmsprop (default: rmsprop)",
     )
     parser.add_argument(
         "--patience",
-        default=0,
+        default=10,
         type=int,
         help="Early stopping: stop after N epochs without val_loss improvement; 0 = disabled (default: 0)",
     )
@@ -132,6 +126,7 @@ def main_train() -> None:
         "--best",
         nargs="*",
         default=None,
+        type=Path,
         metavar="TEST_CSV",
         help="Run hyperparameter grid and pick best run. Optional: one or more test CSV paths; if given, best models are ranked by average metrics on these sets (equal weight, less bias). Displays top 5 per metric.",
     )
@@ -151,7 +146,7 @@ def main_train() -> None:
         batch_size=args.batch_size,
         optimizer=args.optimizer,
         patience=args.patience,
-        test_paths=list(args.best) if args.best else [],
+        test_paths=args.best if args.best else [],
     )
     if args.best is not None:
         run_best_search(
@@ -171,15 +166,15 @@ def main_eda() -> None:
     parser.add_argument(
         "dataset_path",
         nargs="?",
-        default="datasets/train.csv",
-        type=str,
+        default=Path("datasets/train.csv"),
+        type=Path,
         help="Path to training CSV (default: datasets/train.csv)",
     )
     parser.add_argument(
         "--output-dir",
         "-o",
-        default="figures/eda",
-        type=str,
+        default=Path("figures/eda"),
+        type=Path,
         help="Directory to save EDA figures (default: figures/eda)",
     )
     args = parser.parse_args()
@@ -197,13 +192,13 @@ def main_compare() -> None:
     parser.add_argument(
         "run_folders",
         nargs="+",
-        type=str,
+        type=Path,
         help="Paths to run folders (each must contain history.json)",
     )
     parser.add_argument(
         "--save",
         default=None,
-        type=str,
+        type=Path,
         metavar="PATH",
         help="Save figure(s) to PATH (file or directory) instead of displaying",
     )
@@ -254,7 +249,7 @@ def main_compare() -> None:
         "-t",
         nargs="*",
         default=None,
-        type=str,
+        type=Path,
         metavar="TEST_CSV",
         help="Evaluate each run's model on one or more test CSVs; metrics averaged (equal weight). Rank by test metrics and display top 5 per metric.",
     )
@@ -281,20 +276,20 @@ def main_predict() -> None:
     parser.add_argument(
         "dataset_path",
         nargs="?",
-        default="datasets/test.csv",
-        type=str,
+        default=Path("datasets/test.csv"),
+        type=Path,
         help="Path to CSV for prediction (default: datasets/test.csv). Preprocessing (fix + scaler) is applied.",
     )
     parser.add_argument(
         "--model-path",
         required=True,
-        type=str,
+        type=Path,
         help="Path to saved model",
     )
     parser.add_argument(
         "--output-path",
         default=None,
-        type=str,
+        type=Path,
         help="Optional CSV path to save predictions",
     )
     args = parser.parse_args()

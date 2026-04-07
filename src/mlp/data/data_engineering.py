@@ -1,4 +1,5 @@
 import pandas as pd
+from pathlib import Path
 from sklearn.model_selection import train_test_split
 from ..utils.CustomStandardScaler import (
     CustomStandardScaler,
@@ -44,7 +45,7 @@ def split_features_labels(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
 
 
 def scale_features(
-    df: pd.DataFrame, scaler_path: str, training: bool = True
+    df: pd.DataFrame, scaler_path: Path, training: bool = True
 ) -> pd.DataFrame:
     """
     Scale feature columns using CustomStandardScaler. Label column is preserved.
@@ -65,7 +66,7 @@ def scale_features(
 def fit_scaler_on_train_and_transform_train_val(
     train_df: pd.DataFrame,
     val_df: pd.DataFrame,
-    scaler_path: str,
+    scaler_path: Path,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Fit CustomStandardScaler on train_df feature columns, transform both train and val
@@ -91,14 +92,14 @@ def split_train_validation(
     train_df, val_df = train_test_split(
         df,
         test_size=split,
-        random_state=42,
+        random_state=248,
         shuffle=True,
     )
 
     return train_df, val_df
 
 
-def prepare_dataset_cmd(dataset_path: str, output_path: str) -> None:
+def prepare_dataset_cmd(dataset_path: Path, output_path: Path) -> None:
     """
     Load raw dataset, fix (remove id, add column titles, fill missing values)
     and save to output_path. Does not scale; scaling is done during training.
@@ -108,20 +109,18 @@ def prepare_dataset_cmd(dataset_path: str, output_path: str) -> None:
     df.to_csv(output_path, index=False)
 
 
-def split_cmd(dataset_path: str, test_size: float) -> None:
+def split_cmd(dataset_path: Path, test_size: float) -> None:
     """
     Load a prepared dataset (already fixed, not scaled), split into train and test
     and save train.csv and test.csv in a folder named after the dataset (sans extension).
     """
-    import os
-
     df = load_dataset(dataset_path)
     train_df, test_df = split_train_validation(df, test_size)
 
     # Get dataset name without extension, ensure folder exists
-    base_name = os.path.splitext(os.path.basename(dataset_path))[0]
-    target_folder = os.path.join("datasets", base_name)
-    os.makedirs(target_folder, exist_ok=True)
+    base_name = dataset_path.stem
+    target_folder = Path("datasets") / Path(base_name)
+    target_folder.mkdir(parents=True, exist_ok=True)
 
-    train_df.to_csv(os.path.join(target_folder, "train.csv"), index=False)
-    test_df.to_csv(os.path.join(target_folder, "test.csv"), index=False)
+    train_df.to_csv(target_folder / Path("train.csv"), index=False)
+    test_df.to_csv(target_folder / Path("test.csv"), index=False)
