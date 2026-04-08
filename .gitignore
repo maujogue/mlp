@@ -13,3 +13,7 @@ figures/
 temp/
 .DS_Store
 42_evaluation/
+
+# Visualizer frontend
+visualizer/frontend/node_modules/
+visualizer/frontend/dist/

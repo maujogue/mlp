@@ -70,7 +70,7 @@ def main_train() -> None:
     parser.add_argument(
         "train_path",
         type=Path,
-        help="Path to training CSV (default: datasets/train.csv). Split into train/val internally.",
+        help="Path to training CSV (default: datasets/data.csv). Split into train/val internally.",
     )
     parser.add_argument(
         "--val-ratio",
@@ -166,9 +166,9 @@ def main_eda() -> None:
     parser.add_argument(
         "dataset_path",
         nargs="?",
-        default=Path("datasets/train.csv"),
+        default=Path("datasets/data.csv"),
         type=Path,
-        help="Path to training CSV (default: datasets/train.csv)",
+        help="Path to training CSV (default: datasets/data.csv)",
     )
     parser.add_argument(
         "--output-dir",
@@ -300,3 +300,33 @@ def main_predict() -> None:
         dataset_path=args.dataset_path,
         output_path=args.output_path,
     )
+
+
+# ---------- visualizer server ----------
+def main_visualizer() -> None:
+    parser = argparse.ArgumentParser(
+        description="Serve the neural network training visualizer API (and optional static UI build)",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Bind address (default: 127.0.0.1)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8765,
+        help="Port (default: 8765)",
+    )
+    parser.add_argument(
+        "--static",
+        type=Path,
+        default=None,
+        help="Directory with built frontend (e.g. visualizer/frontend/dist) to serve at /",
+    )
+    args = parser.parse_args()
+
+    from .visualizer.server import run_server
+
+    static_dir = args.static.resolve() if args.static is not None else None
+    run_server(host=args.host, port=args.port, static_dir=static_dir)

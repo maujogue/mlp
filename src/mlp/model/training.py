@@ -1,4 +1,5 @@
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -14,6 +15,7 @@ from ..utils.loader import build_run_dir, load_dataset
 from .mlp_classifier import MLPClassifier
 from .plots import save_learning_curves
 from .schemas import TrainingHistory, TrainingRunConfig
+from .telemetry import TrainingTelemetryOptions
 from .serialization import (
     save_model,
     save_run_config,
@@ -48,11 +50,31 @@ def _load_and_prepare_train_val_arrays(
 
 def train_cmd(
     run_config: TrainingRunConfig,
-) -> None:
+) -> Path:
     # batch_size=0 means full dataset per step (full-batch gradient descent)
     # patience=0 means early stopping disabled
     # val_ratio: fraction of train_path to use as validation (train is split into train/val)
     run_dir: Path = build_run_dir(run_config)
+    curves_dir: Path = run_dir / "figures"
+    run_training(
+        run_dir,
+        run_config,
+        telemetry=None,
+        save_artifacts=True,
+    )
+    print(f"Training figures saved to {curves_dir}")
+    return run_dir
+
+
+def run_training(
+    run_dir: Path,
+    run_config: TrainingRunConfig,
+    *,
+    telemetry: TrainingTelemetryOptions | None = None,
+    save_artifacts: bool = True,
+    after_save: Callable[[], None] | None = None,
+) -> TrainingHistory:
+    """Load data, train model, optionally persist artifacts into ``run_dir``."""
     curves_dir: Path = run_dir / "figures"
     model_path: Path = run_dir / "model.pkl"
 
@@ -76,11 +98,28 @@ def train_cmd(
         X_val=X_val,
         y_val=y_val,
         run_config=run_config,
+        telemetry=telemetry,
     )
 
     elapsed_seconds = time.perf_counter() - start_time
-    save_model(model, model_path)
-    save_learning_curves(history, curves_dir)
-    save_training_history(run_dir, history, elapsed_seconds)
-    save_run_config(run_dir, run_config)
-    print(f"Training figures saved to {curves_dir}")
+    if save_artifacts:
+        save_model(model, model_path)
+        save_learning_curves(history, curves_dir)
+        save_training_history(run_dir, history, elapsed_seconds)
+        save_run_config(run_dir, run_config)
+    if after_save is not None:
+        after_save()
+    if (
+        telemetry is not None
+        and telemetry.callback is not None
+        and telemetry.defer_fit_done_callback
+    ):
+        telemetry.callback(
+            "done",
+            {
+                "elapsed_seconds": model.last_fit_seconds,
+                "epochs_ran": len(history.train_loss),
+                "history": history.model_dump(by_alias=True),
+            },
+        )
+    return history

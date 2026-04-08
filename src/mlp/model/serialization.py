@@ -77,3 +77,13 @@ def load_training_history(run_folder: Path) -> TrainingHistory:
     with open(history_path, "r") as f:
         history_data = json.load(f)
     return TrainingHistory.model_validate(history_data)
+
+
+def load_run_config(run_folder: Path) -> TrainingRunConfig:
+    """Load run_config.json from a run folder."""
+    path = run_folder / "run_config.json"
+    if not path.exists():
+        raise FileNotFoundError(f"run_config.json not found in {run_folder}")
+    with open(path, "r") as f:
+        data = json.load(f)
+    return TrainingRunConfig.model_validate(data)

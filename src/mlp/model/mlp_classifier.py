@@ -5,12 +5,25 @@ import time
 import numpy as np
 
 from .schemas import TrainingHistory, TrainingMetrics, TrainingRunConfig
+from .telemetry import TrainingTelemetryOptions
 from ..utils.constants import SEED
 
 
 def _sigmoid(z: np.ndarray) -> np.ndarray:
     """Numerically stable sigmoid."""
     return np.where(z >= 0, 1.0 / (1.0 + np.exp(-z)), np.exp(z) / (1.0 + np.exp(z)))
+
+
+def softmax_cross_entropy_loss(logits: np.ndarray, y: np.ndarray) -> float:
+    """Mean softmax cross-entropy loss for integer class labels (matches backward)."""
+    batch_size = logits.shape[0]
+    y_arr = np.asarray(y, dtype=np.intp)
+    shift = logits.max(axis=1, keepdims=True)
+    exp = np.exp(logits - shift)
+    log_sum_exp = np.log(exp.sum(axis=1, keepdims=True)) + shift
+    log_probs = logits - log_sum_exp
+    nll = -log_probs[np.arange(batch_size), y_arr]
+    return float(np.mean(nll))
 
 
 def softmax_cross_entropy_grad(logits: np.ndarray, y: np.ndarray) -> np.ndarray:
@@ -173,6 +186,7 @@ class MLPClassifier:
         X_val: np.ndarray | None = None,
         y_val: np.ndarray | None = None,
         run_config: TrainingRunConfig,
+        telemetry: TrainingTelemetryOptions | None = None,
     ) -> TrainingHistory:
         """Train the model and return epoch-wise metrics history."""
         from .evaluation import evaluate
@@ -209,8 +223,11 @@ class MLPClassifier:
         epochs_no_improve = 0
         best_weights: list[tuple[np.ndarray, np.ndarray]] | None = None
 
+        n_batches = (n_train + effective_batch_size - 1) // effective_batch_size
+
         for epoch in range(1, run_config.epochs + 1):
             indices = rng.permutation(n_train)
+            batch_num = 0
             for start in range(0, n_train, effective_batch_size):
                 batch_idx = indices[start : start + effective_batch_size]
                 X_batch = X_train_arr[batch_idx]
@@ -219,10 +236,54 @@ class MLPClassifier:
                 logits = self.forward(X_batch)
                 d_logits = softmax_cross_entropy_grad(logits, y_batch)
                 self.backward(d_logits)
-                self.step(
-                    learning_rate=run_config.learning_rate,
-                    optimizer=run_config.optimizer,
+
+                emit_batch = (
+                    telemetry is not None
+                    and telemetry.callback is not None
+                    and telemetry.should_emit_batch(batch_num)
                 )
+                if emit_batch:
+                    loss_batch = softmax_cross_entropy_loss(logits, y_batch)
+                    grad_norm_per_layer = [
+                        float(
+                            np.sqrt(
+                                np.sum(self._grad_W[i] ** 2)
+                                + np.sum(self._grad_b[i] ** 2)
+                            )
+                        )
+                        for i in range(len(self._layers))
+                    ]
+                    W_snap = [W.copy() for W, _ in self._layers]
+                    b_snap = [b.copy() for _, b in self._layers]
+                    self.step(
+                        learning_rate=run_config.learning_rate,
+                        optimizer=run_config.optimizer,
+                    )
+                    weight_delta_norm_per_layer = []
+                    for i in range(len(self._layers)):
+                        d_w = self._layers[i][0] - W_snap[i]
+                        d_b = self._layers[i][1] - b_snap[i]
+                        weight_delta_norm_per_layer.append(
+                            float(np.sqrt(np.sum(d_w * d_w) + np.sum(d_b * d_b)))
+                        )
+                    assert telemetry is not None and telemetry.callback is not None
+                    telemetry.callback(
+                        "batch",
+                        {
+                            "epoch": epoch,
+                            "batch_index": batch_num,
+                            "n_batches": n_batches,
+                            "loss": loss_batch,
+                            "grad_norm_per_layer": grad_norm_per_layer,
+                            "weight_delta_norm_per_layer": weight_delta_norm_per_layer,
+                        },
+                    )
+                else:
+                    self.step(
+                        learning_rate=run_config.learning_rate,
+                        optimizer=run_config.optimizer,
+                    )
+                batch_num += 1
 
             train_metrics: TrainingMetrics = evaluate(self, X_train_arr, y_train_arr)
             history.train_loss.append(train_metrics.loss)
@@ -241,6 +302,31 @@ class MLPClassifier:
                 monitor_loss = val_metrics.loss
             else:
                 monitor_loss = train_metrics.loss
+
+            if telemetry is not None and telemetry.callback is not None:
+                val_payload: dict | None = None
+                if has_val and history.val_loss:
+                    val_payload = {
+                        "loss": history.val_loss[-1],
+                        "accuracy": history.val_accuracy[-1],
+                        "precision": history.val_precision[-1],
+                        "recall": history.val_recall[-1],
+                        "f1": history.val_f1[-1],
+                    }
+                telemetry.callback(
+                    "epoch",
+                    {
+                        "epoch": epoch,
+                        "train": {
+                            "loss": train_metrics.loss,
+                            "accuracy": train_metrics.accuracy,
+                            "precision": train_metrics.precision,
+                            "recall": train_metrics.recall,
+                            "f1": train_metrics.f1,
+                        },
+                        "val": val_payload,
+                    },
+                )
 
             if has_val and X_val_arr is not None and y_val_arr is not None:
                 print(
@@ -278,6 +364,21 @@ class MLPClassifier:
                 np.copyto(self._layers[i][1], best_weights[i][1])
 
         self.last_fit_seconds = time.perf_counter() - fit_start_time
+
+        if (
+            telemetry is not None
+            and telemetry.callback is not None
+            and not telemetry.defer_fit_done_callback
+        ):
+            telemetry.callback(
+                "done",
+                {
+                    "elapsed_seconds": self.last_fit_seconds,
+                    "epochs_ran": len(history.train_loss),
+                    "history": history.model_dump(by_alias=True),
+                },
+            )
+
         return TrainingHistory.model_validate(history)
 
     def logits(self, X: np.ndarray) -> np.ndarray:

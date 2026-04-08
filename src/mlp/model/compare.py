@@ -2,9 +2,9 @@
 
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
-
-from mlp.utils.constants import DEFAULT_RUN_DIR
+from typing import Any
 
 from .plots import plot_comparison
 from .serialization import load_training_history
@@ -60,6 +60,94 @@ def _make_grid() -> list[dict]:
 
 
 BEST_GRID = _make_grid()
+
+# Small grid for the visualizer (~minutes) vs full BEST_GRID (~600 runs).
+VISUALIZER_QUICK_GRID: list[dict[str, Any]] = [
+    {
+        "layers": [24, 24],
+        "learning_rate": 0.01,
+        "batch_size": 0,
+        "optimizer": "rmsprop",
+        "patience": 0,
+    },
+    {
+        "layers": [24, 24],
+        "learning_rate": 0.05,
+        "batch_size": 32,
+        "optimizer": "rmsprop",
+        "patience": 10,
+    },
+    {
+        "layers": [32, 16],
+        "learning_rate": 0.03,
+        "batch_size": 64,
+        "optimizer": "sgd",
+        "patience": 0,
+    },
+    {
+        "layers": [20, 10],
+        "learning_rate": 0.08,
+        "batch_size": 0,
+        "optimizer": "rmsprop",
+        "patience": 20,
+    },
+    {
+        "layers": [24, 24, 12],
+        "learning_rate": 0.01,
+        "batch_size": 16,
+        "optimizer": "rmsprop",
+        "patience": 0,
+    },
+    {
+        "layers": [24, 24, 12],
+        "learning_rate": 0.05,
+        "batch_size": 128,
+        "optimizer": "sgd",
+        "patience": 10,
+    },
+    {
+        "layers": [16, 8],
+        "learning_rate": 0.03,
+        "batch_size": 32,
+        "optimizer": "rmsprop",
+        "patience": 0,
+    },
+    {
+        "layers": [24, 24],
+        "learning_rate": 0.08,
+        "batch_size": 64,
+        "optimizer": "rmsprop",
+        "patience": 20,
+    },
+    {
+        "layers": [32, 16],
+        "learning_rate": 0.01,
+        "batch_size": 0,
+        "optimizer": "sgd",
+        "patience": 10,
+    },
+    {
+        "layers": [20, 10],
+        "learning_rate": 0.05,
+        "batch_size": 16,
+        "optimizer": "rmsprop",
+        "patience": 0,
+    },
+    {
+        "layers": [24, 24],
+        "learning_rate": 0.03,
+        "batch_size": 128,
+        "optimizer": "rmsprop",
+        "patience": 20,
+    },
+    {
+        "layers": [16, 8],
+        "learning_rate": 0.08,
+        "batch_size": 32,
+        "optimizer": "sgd",
+        "patience": 0,
+    },
+]
 
 
 def expand_run_folders(run_folders: list[Path]) -> list[Path]:
@@ -245,10 +333,10 @@ def _top_n_flat(
     return out
 
 
-def write_best_summary(parent_dir: Path, histories: list[RunHistory]) -> None:
-    """Write best_summary.json with best run, top TOP_N per metric, and all_runs."""
-    path = parent_dir
-    path.mkdir(parents=True, exist_ok=True)
+def best_summary_payload(histories: list[RunHistory]) -> dict[str, Any]:
+    """Same structure as best_summary.json (for SSE/UI). Empty histories -> {}."""
+    if not histories:
+        return {}
     best = _best_per_metric(histories)
     use_test = _use_test_metrics(histories)
     rec_key = "test_recall" if use_test else "val_recall"
@@ -258,7 +346,7 @@ def write_best_summary(parent_dir: Path, histories: list[RunHistory]) -> None:
     rec_key_rank = _TEST_RECALL if use_test else _VAL_RECALL
     prec_key_rank = _TEST_PRECISION if use_test else _VAL_PRECISION
     f1_key_rank = _TEST_F1 if use_test else _VAL_F1
-    summary = {
+    return {
         "best_by_recall": {
             "run_dir": str(best["recall"][0]),
             rec_key: best["recall"][1],
@@ -289,6 +377,18 @@ def write_best_summary(parent_dir: Path, histories: list[RunHistory]) -> None:
         "top_5_by_val_loss": _top_n_flat(rank_runs_by_val_loss(histories), loss_key),
         "all_runs": _all_runs_flat(histories),
     }
+
+
+def leaderboard_snapshot(histories: list[RunHistory]) -> dict[str, Any]:
+    """Alias for live grid leaderboard (same as best_summary_payload)."""
+    return best_summary_payload(histories)
+
+
+def write_best_summary(parent_dir: Path, histories: list[RunHistory]) -> None:
+    """Write best_summary.json with best run, top TOP_N per metric, and all_runs."""
+    path = parent_dir
+    path.mkdir(parents=True, exist_ok=True)
+    summary = best_summary_payload(histories)
     with open(path / "best_summary.json", "w") as f:
         json.dump(summary, f, indent=2)
     print(f"  summary saved to   {path / 'best_summary.json'}")
@@ -375,8 +475,17 @@ def compare_cmd(
     print_best_summary(histories)
 
 
+ComboCompleteCallback = Callable[
+    [int, int, Path, TrainingHistory, dict[str, Any]],
+    None,
+]
+
+
 def run_best_search(
     run_config: TrainingRunConfig,
+    *,
+    grid: list[dict[str, Any]] | None = None,
+    on_combo_complete: ComboCompleteCallback | None = None,
 ) -> Path:
     """Run hyperparameter grid, rank by recall (test if test_paths else val) then time; return best run dir.
     When test_paths is provided, each trained model is evaluated on those datasets; metrics are averaged
@@ -389,16 +498,22 @@ def run_best_search(
     if "label" not in df.columns:
         df = fix_dataset(df)
     timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
-    parent_dir = Path(DEFAULT_RUN_DIR) / Path(
+    base_parent = run_config.parent_dir
+    if not base_parent.is_absolute():
+        base_parent = Path.cwd() / base_parent
+    parent_dir = base_parent.resolve() / Path(
         f"best_{run_config.train_path.stem}_{timestamp}"
     )
     parent_dir.mkdir(parents=True, exist_ok=True)
 
-    for i, combo in enumerate(BEST_GRID):
+    combos = BEST_GRID if grid is None else grid
+    histories: list[RunHistory] = []
+
+    for i, combo in enumerate(combos):
         print(
-            f"[best] Run {i + 1}/{len(BEST_GRID)}: {Path(parent_dir).name} (epochs={run_config.epochs})"
+            f"[best] Run {i + 1}/{len(combos)}: {Path(parent_dir).name} (epochs={run_config.epochs})"
         )
-        train_cmd(
+        run_dir = train_cmd(
             run_config=TrainingRunConfig(
                 train_path=run_config.train_path,
                 val_ratio=run_config.val_ratio,
@@ -412,15 +527,14 @@ def run_best_search(
                 parent_dir=parent_dir,
             ),
         )
+        history = load_training_history(run_dir)
+        histories.append((run_dir, history))
+        if on_combo_complete is not None:
+            snap = leaderboard_snapshot(histories)
+            on_combo_complete(i + 1, len(combos), run_dir, history, snap)
 
-    subdirs = [
-        s
-        for s in sorted(Path(parent_dir).iterdir())
-        if s.is_dir() and (s / "history.json").exists()
-    ]
-    if not subdirs:
+    if not histories:
         raise RuntimeError("No completed runs with history.json found")
-    histories = load_histories(subdirs)
 
     if run_config.test_paths:
         n = len(run_config.test_paths)

@@ -13,7 +13,7 @@ A **multilayer perceptron (MLP)** implemented in NumPy from scratch (no autograd
 ## Requirements
 
 - **Python** ≥ 3.13, &lt; 3.14
-- **Dependencies**: `numpy`, `pandas`, `scikit-learn`, `matplotlib`, `seaborn`, `pydantic`
+- **Dependencies**: `numpy`, `pandas`, `scikit-learn`, `matplotlib`, `seaborn`, `pydantic`, `fastapi`, `uvicorn`
 
 ## Installation
 
@@ -109,6 +109,36 @@ mlp-compare run_folder1 run_folder2 ... [--save path_or_dir] [--test test1.csv t
 
 Optional: `--accuracy`, `--f1`, `--recall`, `--precision`, `--val`, `--train`, `--val-train`.
 
+### 7. Training visualizer (replay + live)
+
+Interactive UI for **epoch-by-epoch replay** of saved runs (`history.json` / `run_config.json`) and **live training** with per-batch and per-epoch telemetry over **SSE**.
+
+**API contract** (endpoints and event shapes): [docs/visualizer_api.md](docs/visualizer_api.md).
+
+1. Install JS deps and build the UI (from repo root):
+
+   ```bash
+   cd visualizer/frontend && npm install && npm run build
+   ```
+
+2. Start the server (serves API + static UI):
+
+   ```bash
+   mlp-visualizer --static visualizer/frontend/dist
+   ```
+
+   Or API only on default port `8765` (use with Vite dev proxy):
+
+   ```bash
+   mlp-visualizer
+   ```
+
+3. **Dev workflow**: terminal A — `mlp-visualizer` ; terminal B — `cd visualizer/frontend && npm run dev` → open the URL Vite prints (proxies `/api` to `127.0.0.1:8765`).
+
+**Replay**: scans `temp/` (or set “Runs root” in the UI) for `**/history.json`. Curves use the same series as `history.json` (parity with `mlp-compare` / saved PNGs).
+
+**Live**: `POST /api/live/train` starts training in a background thread; connect `GET /api/live/stream/{session_id}` immediately after (the UI does this). Batch events include **loss**, **gradient norm per layer**, and **weight-update norm per layer** (when sampling allows).
+
 ## Development
 
 From the project root:
@@ -134,6 +164,7 @@ mlp/
 │       │   └── feature_engineering.py # EDA
 │       ├── model/
 │       │   ├── mlp_classifier.py    # MLPClassifier (NumPy)
+│       │   ├── telemetry.py         # optional training telemetry for visualizer
 │       │   ├── schemas.py           # Pydantic config & training history
 │       │   ├── training.py          # train command
 │       │   ├── predict.py           # predict command
@@ -141,10 +172,17 @@ mlp/
 │       │   ├── compare.py           # best search + run comparison
 │       │   ├── plots.py             # learning curves
 │       │   └── serialization.py    # save/load model + scaler
+│       ├── visualizer/              # FastAPI server + run discovery
+│       │   ├── server.py
+│       │   ├── discovery.py
+│       │   └── api_schemas.py
 │       └── utils/
 │           ├── constants.py         # feature names, labels
 │           ├── loader.py            # dataset loading
 │           └── CustomStandardScaler.py
+├── docs/
+│   └── visualizer_api.md            # HTTP + SSE contract
+├── visualizer/frontend/             # React + Vite UI (npm)
 └── README.md
 ```
 

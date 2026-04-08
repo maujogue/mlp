@@ -8,12 +8,14 @@ authors = [
 ]
 requires-python = ">=3.13,<3.14"
 dependencies = [
+    "fastapi>=0.115.0",
     "matplotlib>=3.10.8",
     "numpy>=2.4.2",
     "pandas>=3.0.0",
     "pydantic>=2.12.5",
     "scikit-learn",
     "seaborn>=0.13.2",
+    "uvicorn[standard]>=0.32.0",
 ]
 
 [dependency-groups]
@@ -33,3 +35,4 @@ mlp-train = "mlp.cli:main_train"
 mlp-predict = "mlp.cli:main_predict"
 mlp-eda = "mlp.cli:main_eda"
 mlp-compare = "mlp.cli:main_compare"
+mlp-visualizer = "mlp.cli:main_visualizer"

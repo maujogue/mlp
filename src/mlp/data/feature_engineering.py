@@ -238,7 +238,7 @@ def plot_pca_scatter(
 
 
 def run_eda(
-    dataset_path: Path = Path("datasets/train.csv"),
+    dataset_path: Path = Path("datasets/data.csv"),
     output_dir: Path = Path("figures/eda"),
 ) -> None:
     """

@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")  # file-only backend; safe from worker threads (no GUI on macOS)
 import matplotlib.pyplot as plt
 
 from .schemas import TrainingHistory
@@ -111,12 +114,16 @@ def plot_comparison(
     if not metrics:
         return
 
-    save_dir: Path | None = None
-    save_first_file: Path | None = None
+    save_dir: Path
+    save_first_file: Path | None
     if save_path:
         save_dir = save_path.parent
         save_dir.mkdir(parents=True, exist_ok=True)
         save_first_file = save_path
+    else:
+        save_dir = Path("figures/compare")
+        save_dir.mkdir(parents=True, exist_ok=True)
+        save_first_file = None
 
     for idx, (title, ylabel, train_key, val_key) in enumerate(metrics):
         plt.figure(figsize=(8, 5))
@@ -140,13 +147,12 @@ def plot_comparison(
         plt.title(title)
         plt.legend()
         plt.tight_layout()
-        if save_dir is not None:
-            if save_first_file is not None and idx == 0:
-                plt.savefig(save_first_file, dpi=150, bbox_inches="tight")
-            else:
-                safe_name = title.lower().replace(" ", "_").replace("-", "_") + ".png"
-                plt.savefig(save_dir / safe_name, dpi=150, bbox_inches="tight")
-            plt.close()
+        if save_first_file is not None and idx == 0:
+            plt.savefig(save_first_file, dpi=150, bbox_inches="tight")
         else:
-            plt.show()
-            plt.close()
+            safe_name = title.lower().replace(" ", "_").replace("-", "_") + ".png"
+            plt.savefig(save_dir / safe_name, dpi=150, bbox_inches="tight")
+        plt.close()
+
+    if save_path is None:
+        print(f"Comparison plots saved under {save_dir.resolve()} (non-interactive backend).")
