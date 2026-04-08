@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { FolderOpen } from "lucide-react";
 import type { PrepareDatasetResponse, SplitDatasetResponse } from "../types";
 import { DatasetCsvPickRow } from "./DatasetCsvPickRow";
+import { Disclosure, FieldLabel, FormStack } from "./ui-shell";
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -92,111 +94,124 @@ export function DataManagementPanel({
   return (
     <div className="panel">
       <h2>Data preparation</h2>
-      <p className="hint">
-        List CSVs under a folder (default <code>datasets/</code>), prepare a raw file (same as{" "}
-        <code>mlp-prepare-dataset</code>), then split a prepared file into{" "}
-        <code>datasets/&lt;stem&gt;/train.csv</code> and <code>test.csv</code> (same as{" "}
-        <code>mlp-split</code>). Use the pickers on other tabs to point training and evaluation at these
-        paths.
-      </p>
+      <Disclosure title="About data prep">
+        <p className="hint" style={{ marginTop: "var(--space-2)" }}>
+          List CSVs under a folder (default <code>datasets/</code>), prepare a raw file (same as{" "}
+          <code>mlp-prepare-dataset</code>), then split a prepared file into{" "}
+          <code>datasets/&lt;stem&gt;/train.csv</code> and <code>test.csv</code> (same as{" "}
+          <code>mlp-split</code>). Use the pickers on other tabs to point training and evaluation at these
+          paths.
+        </p>
+      </Disclosure>
 
-      <div className="row" style={{ flexWrap: "wrap", alignItems: "flex-end", gap: "0.5rem" }}>
-        <label>
-          Scan folder for CSV list
+      <div className="row" style={{ marginBottom: "var(--space-3)", alignItems: "flex-end", flexWrap: "wrap" }}>
+        <div>
+          <FieldLabel htmlFor="data-scan-root" icon={FolderOpen}>
+            Scan folder for CSV list
+          </FieldLabel>
           <input
+            id="data-scan-root"
             type="text"
             value={scanRoot}
             onChange={(e) => onScanRootChange(e.target.value)}
-            style={{ width: "10rem" }}
+            style={{ width: "14rem", marginTop: "var(--space-1)" }}
           />
-        </label>
+        </div>
         <button type="button" disabled={listBusy} onClick={() => onRefreshList()}>
           {listBusy ? "Loading…" : "Refresh list"}
         </button>
-        {resolvedRootLabel && (
-          <span className="hint" style={{ wordBreak: "break-all" }}>
-            Resolved: {resolvedRootLabel}
-          </span>
-        )}
       </div>
+      {resolvedRootLabel && (
+        <p className="hint" style={{ wordBreak: "break-all", marginTop: 0 }}>
+          Resolved: {resolvedRootLabel}
+        </p>
+      )}
       {listError && <p className="hint error">{listError}</p>}
 
-      <h3 style={{ marginTop: "1.25rem" }}>Prepare raw → prepared</h3>
-      <DatasetCsvPickRow
-        label="Source CSV"
-        pathValue={prepareSource}
-        onPathChange={setPrepareSource}
-        scanRoot={scanRoot}
-        relativeFiles={relativeFiles}
-        inputPlaceholder="datasets/raw.csv"
-      />
-      <label style={{ display: "block", marginTop: "0.5rem" }}>
-        Optional output path (empty = next to source, *_prepared.csv)
-        <input
-          type="text"
-          value={prepareOutput}
-          onChange={(e) => setPrepareOutput(e.target.value)}
-          style={{ width: "min(100%, 28rem)", marginTop: "0.25rem" }}
-        />
-      </label>
-      <button
-        type="button"
-        style={{ marginTop: "0.65rem" }}
-        disabled={prepareBusy}
-        onClick={() => void runPrepare()}
-      >
-        {prepareBusy ? "Preparing…" : "Prepare dataset"}
-      </button>
-      {prepareMsg && (
-        <pre className="hint" style={{ marginTop: "0.5rem", whiteSpace: "pre-wrap" }}>
-          {prepareMsg}
-        </pre>
-      )}
-
-      <h3 style={{ marginTop: "1.25rem" }}>Split prepared → train / test</h3>
-      <DatasetCsvPickRow
-        label="Prepared CSV"
-        pathValue={splitPrepared}
-        onPathChange={setSplitPrepared}
-        scanRoot={scanRoot}
-        relativeFiles={relativeFiles}
-        inputPlaceholder="datasets/data_prepared.csv"
-      />
-      <div className="row" style={{ marginTop: "0.5rem", flexWrap: "wrap", alignItems: "flex-end" }}>
-        <label>
-          Test fraction
-          <input
-            type="number"
-            step={0.05}
-            min={0.05}
-            max={0.49}
-            value={splitTestSize}
-            onChange={(e) => setSplitTestSize(Number(e.target.value))}
-            style={{ width: "5.5rem" }}
+      <Disclosure title="Prepare raw → prepared" defaultOpen>
+        <FormStack>
+          <DatasetCsvPickRow
+            idPrefix="data-prepare-src"
+            label="Source CSV"
+            pathValue={prepareSource}
+            onPathChange={setPrepareSource}
+            scanRoot={scanRoot}
+            relativeFiles={relativeFiles}
+            inputPlaceholder="datasets/raw.csv"
           />
-        </label>
-        <button type="button" disabled={splitBusy} onClick={() => void runSplit()}>
-          {splitBusy ? "Splitting…" : "Split"}
-        </button>
-      </div>
-      {splitMsg && (
-        <pre className="hint" style={{ marginTop: "0.5rem", whiteSpace: "pre-wrap" }}>
-          {splitMsg}
-        </pre>
-      )}
+          <div>
+            <FieldLabel htmlFor="prepare-output-path">
+              Optional output path (empty = next to source, *_prepared.csv)
+            </FieldLabel>
+            <input
+              id="prepare-output-path"
+              type="text"
+              value={prepareOutput}
+              onChange={(e) => setPrepareOutput(e.target.value)}
+              style={{ width: "min(100%, 28rem)", marginTop: "var(--space-1)" }}
+            />
+          </div>
+          <button type="button" disabled={prepareBusy} onClick={() => void runPrepare()}>
+            {prepareBusy ? "Preparing…" : "Prepare dataset"}
+          </button>
+          {prepareMsg && (
+            <pre className="hint" style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+              {prepareMsg}
+            </pre>
+          )}
+        </FormStack>
+      </Disclosure>
 
-      <h3 style={{ marginTop: "1.25rem" }}>CSV files under scan folder</h3>
-      {relativeFiles.length === 0 ? (
-        <p className="hint">No CSV files found. Adjust the scan folder or add data.</p>
-      ) : (
-        <ul className="hint" style={{ maxHeight: 200, overflow: "auto", margin: 0 }}>
-          {relativeFiles.map((f) => (
-            <li key={f}>
-              <code>{f}</code>
-            </li>
-          ))}
-        </ul>
-      )}
+      <Disclosure title="Split prepared → train / test" defaultOpen>
+        <FormStack>
+          <DatasetCsvPickRow
+            idPrefix="data-split-prepared"
+            label="Prepared CSV"
+            pathValue={splitPrepared}
+            onPathChange={setSplitPrepared}
+            scanRoot={scanRoot}
+            relativeFiles={relativeFiles}
+            inputPlaceholder="datasets/data_prepared.csv"
+          />
+          <div className="row" style={{ alignItems: "flex-end", flexWrap: "wrap", gap: "var(--space-3)" }}>
+            <label className="field-label">
+              <span className="field-label-row">Test fraction</span>
+              <input
+                type="number"
+                step={0.05}
+                min={0.05}
+                max={0.49}
+                value={splitTestSize}
+                onChange={(e) => setSplitTestSize(Number(e.target.value))}
+              />
+            </label>
+            <button type="button" disabled={splitBusy} onClick={() => void runSplit()}>
+              {splitBusy ? "Splitting…" : "Split"}
+            </button>
+          </div>
+          {splitMsg && (
+            <pre className="hint" style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+              {splitMsg}
+            </pre>
+          )}
+        </FormStack>
+      </Disclosure>
+
+      <Disclosure title="CSV files under scan folder" defaultOpen>
+        {relativeFiles.length === 0 ? (
+          <p className="hint" style={{ marginTop: "var(--space-2)" }}>
+            No CSV files found. Adjust the scan folder or add data.
+          </p>
+        ) : (
+          <ul className="hint" style={{ maxHeight: 200, overflow: "auto", margin: "var(--space-2) 0 0", paddingLeft: "1.25rem" }}>
+            {relativeFiles.map((f) => (
+              <li key={f}>
+                <code>{f}</code>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Disclosure>
     </div>
   );
 }

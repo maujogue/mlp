@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { AlertTriangle, FileStack } from "lucide-react";
 import type { BestSummaryPayload, GridSseEvent } from "../types";
 import { DatasetCsvPickRow } from "./DatasetCsvPickRow";
+import { Callout, Disclosure, FieldLabel, FormGrid, FormStack, LogPanel } from "./ui-shell";
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -239,40 +241,39 @@ export function GridSearchPanel({
   return (
     <div className="panel">
       <h2>Hyperparameter grid (best search)</h2>
-      <p className="hint">
-        Runs the same style of search as <code>mlp-train --best</code>. Quick mode uses a small grid
-        (~12 runs). Full mode runs the entire CLI grid (hundreds of trainings); use only when you
-        intend to wait a long time.
-      </p>
+      <Disclosure title="About grid search">
+        <p className="hint" style={{ marginTop: "var(--space-2)" }}>
+          Runs the same style of search as <code>mlp-train --best</code>. Quick mode uses a small grid (~12
+          runs). Full mode runs the entire CLI grid (hundreds of trainings); use only when you intend to wait
+          a long time.
+        </p>
+      </Disclosure>
 
-      <div className="row" style={{ flexDirection: "column", alignItems: "stretch", gap: "0.75rem" }}>
+      <FormStack>
         <DatasetCsvPickRow
+          idPrefix="grid-train"
           label="Train CSV path"
           pathValue={trainPath}
           onPathChange={onTrainPathChange}
           scanRoot={datasetsScanRoot}
           relativeFiles={datasetCsvFiles}
         />
-        <label>
-          Optional test CSV paths (comma or newline separated)
+        <div>
+          <FieldLabel htmlFor="grid-test-paths" icon={FileStack}>
+            Optional test CSV paths (comma or newline separated)
+          </FieldLabel>
           <textarea
+            id="grid-test-paths"
             value={testPathsRaw}
             onChange={(e) => onTestPathsRawChange(e.target.value)}
             rows={2}
-            style={{
-              width: "100%",
-              maxWidth: "28rem",
-              background: "var(--bg)",
-              border: "1px solid var(--border)",
-              color: "var(--text)",
-              borderRadius: "var(--radius-sm)",
-              padding: "0.45rem 0.55rem",
-              fontFamily: "inherit",
-            }}
+            style={{ width: "100%", maxWidth: "28rem", marginTop: "var(--space-1)" }}
           />
-        </label>
-        <label>
-          Add one test path from <code>{datasetsScanRoot}</code>
+        </div>
+        <label className="field-label">
+          <span className="field-label-row">
+            Add one test path from <code>{datasetsScanRoot}</code>
+          </span>
           <select
             value={testPathPicker}
             onChange={(e) => {
@@ -284,6 +285,7 @@ export function GridSearchPanel({
               );
               setTestPathPicker("");
             }}
+            style={{ maxWidth: "28rem", marginTop: "var(--space-1)" }}
           >
             <option value="">—</option>
             {datasetCsvFiles.map((f) => (
@@ -293,9 +295,9 @@ export function GridSearchPanel({
             ))}
           </select>
         </label>
-        <div className="row">
-          <label>
-            Epochs
+        <FormGrid wide>
+          <label className="field-label">
+            <span className="field-label-row">Epochs</span>
             <input
               type="number"
               min={1}
@@ -303,8 +305,8 @@ export function GridSearchPanel({
               onChange={(e) => setEpochs(Number(e.target.value))}
             />
           </label>
-          <label>
-            Val ratio
+          <label className="field-label">
+            <span className="field-label-row">Val ratio</span>
             <input
               type="number"
               step={0.05}
@@ -314,8 +316,8 @@ export function GridSearchPanel({
               onChange={(e) => setValRatio(Number(e.target.value))}
             />
           </label>
-          <label>
-            Grid
+          <label className="field-label">
+            <span className="field-label-row">Grid</span>
             <select
               value={gridMode}
               onChange={(e) => setGridMode(e.target.value as "quick" | "full")}
@@ -324,16 +326,16 @@ export function GridSearchPanel({
               <option value="full">Full (~600)</option>
             </select>
           </label>
-        </div>
+        </FormGrid>
         {gridMode === "full" && (
-          <div className="annotation">
-            Full grid runs hundreds of sequential trainings. Confirm you want this before starting.
-          </div>
+          <Callout variant="warning" title="Large grid" icon={AlertTriangle}>
+            <p>Full grid runs hundreds of sequential trainings. Confirm you want this before starting.</p>
+          </Callout>
         )}
         <button type="button" disabled={busy} onClick={() => void start()}>
           {busy ? "Grid running…" : "Start grid search"}
         </button>
-      </div>
+      </FormStack>
 
       {progress && (
         <div style={{ marginTop: "1rem" }}>
@@ -377,11 +379,7 @@ export function GridSearchPanel({
         </div>
       )}
 
-      <ul className="hint" style={{ marginTop: "1rem" }}>
-        {log.map((line, i) => (
-          <li key={i}>{line}</li>
-        ))}
-      </ul>
+      <LogPanel lines={log} title="Grid event log" />
     </div>
   );
 }

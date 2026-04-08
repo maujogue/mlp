@@ -1,4 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Activity,
+  Database,
+  FolderOpen,
+  GraduationCap,
+  History,
+  LayoutGrid,
+  Lightbulb,
+  RefreshCw,
+} from "lucide-react";
 import FullscreenLessonPlayback from "./FullscreenLessonPlayback.tsx";
 import {
   CartesianGrid,
@@ -13,6 +23,14 @@ import {
 import { DataManagementPanel } from "./components/DataManagementPanel";
 import { DatasetCsvPickRow } from "./components/DatasetCsvPickRow";
 import { GridSearchPanel } from "./components/GridSearchPanel";
+import {
+  Callout,
+  Disclosure,
+  FieldLabel,
+  FormGrid,
+  FormStack,
+  LogPanel,
+} from "./components/ui-shell";
 import type {
   DatasetListResponse,
   EvaluateTestResponse,
@@ -787,57 +805,64 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <h1>MLP training visualizer</h1>
-        <p className="hint">
-          Start the API with <code>mlp-visualizer</code> (port 8765). For dev UI, run{" "}
-          <code>npm install && npm run dev</code> in <code>visualizer/frontend</code> (Vite proxies{" "}
-          <code>/api</code>).
-        </p>
       </header>
 
       <div className="tabs">
         <button
           type="button"
-          className={tab === "data" ? "active" : ""}
+          className={tab === "data" ? "active tab-btn" : "tab-btn"}
           onClick={() => setTab("data")}
         >
+          <Database size={16} strokeWidth={2} aria-hidden />
           Data
         </button>
         <button
           type="button"
-          className={tab === "replay" ? "active" : ""}
+          className={tab === "replay" ? "active tab-btn" : "tab-btn"}
           onClick={() => setTab("replay")}
         >
+          <History size={16} strokeWidth={2} aria-hidden />
           Replay runs
         </button>
         <button
           type="button"
-          className={tab === "live" ? "active" : ""}
+          className={tab === "live" ? "active tab-btn" : "tab-btn"}
           onClick={() => setTab("live")}
         >
+          <Activity size={16} strokeWidth={2} aria-hidden />
           Live training
         </button>
         <button
           type="button"
-          className={tab === "grid" ? "active" : ""}
+          className={tab === "grid" ? "active tab-btn" : "tab-btn"}
           onClick={() => setTab("grid")}
         >
+          <LayoutGrid size={16} strokeWidth={2} aria-hidden />
           Grid search
         </button>
       </div>
 
       <div className="toolbar">
-        <label>
-          Runs root
-          <input
-            type="text"
-            value={runsRoot}
-            onChange={(e) => setRunsRoot(e.target.value)}
-            style={{ width: "14rem" }}
-          />
-        </label>
-        <button type="button" onClick={() => void loadRuns()}>
-          Refresh runs
-        </button>
+        <div className="toolbar-actions">
+          <label className="field-label">
+            <span className="field-label-row">
+              <FolderOpen size={14} strokeWidth={2} aria-hidden />
+              <span>Runs root</span>
+            </span>
+            <input
+              type="text"
+              value={runsRoot}
+              onChange={(e) => setRunsRoot(e.target.value)}
+              style={{ width: "14rem", marginTop: "var(--space-1)" }}
+            />
+          </label>
+          <button type="button" onClick={() => void loadRuns()}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+              <RefreshCw size={16} strokeWidth={2} aria-hidden />
+              Refresh runs
+            </span>
+          </button>
+        </div>
       </div>
       {runsError && <p className="hint error">{runsError}</p>}
 
@@ -860,102 +885,107 @@ export default function App() {
               Runs ({displayedRuns.length} shown · {experimentRuns.length} match experiment filters ·{" "}
               {runs.length} total)
             </h2>
-            <p className="hint">
-              Use experiment dropdowns to narrow configs, then run test-set evaluation. The table applies
-              all filters including test BCE after scores are computed.
-            </p>
-            <div className="row" style={{ marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
-              <label>
-                Train CSV (config)
-                <select value={fTrainPath} onChange={(e) => setFTrainPath(e.target.value)}>
-                  <option value="">Any</option>
-                  {optTrainPaths.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Layers
-                <select value={fLayers} onChange={(e) => setFLayers(e.target.value)}>
-                  <option value="">Any</option>
-                  {optLayers.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Epochs (cfg)
-                <select value={fEpochs} onChange={(e) => setFEpochs(e.target.value)}>
-                  <option value="">Any</option>
-                  {optEpochs.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                LR
-                <select value={fLr} onChange={(e) => setFLr(e.target.value)}>
-                  <option value="">Any</option>
-                  {optLrs.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Seed
-                <select value={fSeed} onChange={(e) => setFSeed(e.target.value)}>
-                  <option value="">Any</option>
-                  {optSeeds.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Batch
-                <select value={fBatch} onChange={(e) => setFBatch(e.target.value)}>
-                  <option value="">Any</option>
-                  {optBatches.map((p) => (
-                    <option key={p} value={p}>
-                      {p === "0" ? "full (0)" : p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Optimizer
-                <select value={fOptimizer} onChange={(e) => setFOptimizer(e.target.value)}>
-                  <option value="">Any</option>
-                  {optOptim.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Patience
-                <select value={fPatience} onChange={(e) => setFPatience(e.target.value)}>
-                  <option value="">Any</option>
-                  {optPatience.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="row" style={{ marginBottom: "0.75rem", flexWrap: "wrap", alignItems: "flex-end" }}>
+            <Disclosure title="How this tab works">
+              <p className="hint" style={{ marginTop: "var(--space-2)" }}>
+                Use experiment filters to narrow configs, then run test-set evaluation. The table applies all
+                filters including test BCE after scores are computed.
+              </p>
+            </Disclosure>
+            <Disclosure title="Experiment filters" defaultOpen>
+              <FormGrid wide>
+                <label className="field-label">
+                  <span className="field-label-row">Train CSV (config)</span>
+                  <select value={fTrainPath} onChange={(e) => setFTrainPath(e.target.value)}>
+                    <option value="">Any</option>
+                    {optTrainPaths.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Layers</span>
+                  <select value={fLayers} onChange={(e) => setFLayers(e.target.value)}>
+                    <option value="">Any</option>
+                    {optLayers.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Epochs (cfg)</span>
+                  <select value={fEpochs} onChange={(e) => setFEpochs(e.target.value)}>
+                    <option value="">Any</option>
+                    {optEpochs.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">LR</span>
+                  <select value={fLr} onChange={(e) => setFLr(e.target.value)}>
+                    <option value="">Any</option>
+                    {optLrs.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Seed</span>
+                  <select value={fSeed} onChange={(e) => setFSeed(e.target.value)}>
+                    <option value="">Any</option>
+                    {optSeeds.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Batch</span>
+                  <select value={fBatch} onChange={(e) => setFBatch(e.target.value)}>
+                    <option value="">Any</option>
+                    {optBatches.map((p) => (
+                      <option key={p} value={p}>
+                        {p === "0" ? "full (0)" : p}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Optimizer</span>
+                  <select value={fOptimizer} onChange={(e) => setFOptimizer(e.target.value)}>
+                    <option value="">Any</option>
+                    {optOptim.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Patience</span>
+                  <select value={fPatience} onChange={(e) => setFPatience(e.target.value)}>
+                    <option value="">Any</option>
+                    {optPatience.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </FormGrid>
+            </Disclosure>
+            <div className="form-stack" style={{ marginBottom: "var(--space-3)" }}>
               <DatasetCsvPickRow
+                idPrefix="replay-test"
                 label="Test CSV (binary CE)"
                 pathValue={dataTestPath}
                 onPathChange={setDataTestPath}
@@ -963,98 +993,98 @@ export default function App() {
                 relativeFiles={datasetCsvFiles}
                 inputPlaceholder="datasets/…/test.csv"
               />
-              <button
-                type="button"
-                disabled={replayEvalBusy || !dataTestPath.trim() || experimentRuns.length === 0}
-                onClick={() => void runReplayTestEval()}
-              >
-                {replayEvalBusy ? "Evaluating…" : `Evaluate ${experimentRuns.length} runs`}
-              </button>
+              <div className="row" style={{ alignItems: "flex-end" }}>
+                <button
+                  type="button"
+                  disabled={replayEvalBusy || !dataTestPath.trim() || experimentRuns.length === 0}
+                  onClick={() => void runReplayTestEval()}
+                >
+                  {replayEvalBusy ? "Evaluating…" : `Evaluate ${experimentRuns.length} runs`}
+                </button>
+              </div>
             </div>
             {replayEvalError && <p className="hint error">{replayEvalError}</p>}
-            <div className="row" style={{ marginBottom: "0.75rem", flexWrap: "wrap" }}>
-              <label>
-                Search path
-                <input
-                  type="text"
-                  placeholder="substring…"
-                  value={runSearch}
-                  onChange={(e) => setRunSearch(e.target.value)}
-                  style={{ width: "12rem" }}
-                />
-              </label>
-              <label>
-                Sort
-                <select
-                  value={runSort}
-                  onChange={(e) => setRunSort(e.target.value as RunSort)}
-                >
-                  <option value="newest">Newest first</option>
-                  <option value="val_loss_asc">Val loss (low → high)</option>
-                  <option value="val_loss_desc">Val loss (high → low)</option>
-                  <option value="train_loss_asc">Train loss (low → high)</option>
-                  <option value="train_loss_desc">Train loss (high → low)</option>
-                  <option value="test_bce_asc">Test BCE (low → high)</option>
-                  <option value="test_bce_desc">Test BCE (high → low)</option>
-                  <option value="path_asc">Path A–Z</option>
-                </select>
-              </label>
-              <label>
-                Updated
-                <select
-                  value={datePreset}
-                  onChange={(e) => setDatePreset(e.target.value as DatePreset)}
-                >
-                  <option value="any">Any time</option>
-                  <option value="24h">Last 24h</option>
-                  <option value="7d">Last 7 days</option>
-                </select>
-              </label>
-              <label>
-                Min val loss
-                <input
-                  type="number"
-                  step={0.01}
-                  placeholder="—"
-                  value={valLossMin}
-                  onChange={(e) => setValLossMin(e.target.value)}
-                  style={{ width: "5.5rem" }}
-                />
-              </label>
-              <label>
-                Max val loss
-                <input
-                  type="number"
-                  step={0.01}
-                  placeholder="—"
-                  value={valLossMax}
-                  onChange={(e) => setValLossMax(e.target.value)}
-                  style={{ width: "5.5rem" }}
-                />
-              </label>
-              <label>
-                Min test BCE
-                <input
-                  type="number"
-                  step={0.001}
-                  placeholder="—"
-                  value={testBceMin}
-                  onChange={(e) => setTestBceMin(e.target.value)}
-                  style={{ width: "5.5rem" }}
-                />
-              </label>
-              <label>
-                Max test BCE
-                <input
-                  type="number"
-                  step={0.001}
-                  placeholder="—"
-                  value={testBceMax}
-                  onChange={(e) => setTestBceMax(e.target.value)}
-                  style={{ width: "5.5rem" }}
-                />
-              </label>
-            </div>
+            <Disclosure title="Table filters" defaultOpen>
+              <FormGrid wide>
+                <label className="field-label">
+                  <span className="field-label-row">Search path</span>
+                  <input
+                    type="text"
+                    placeholder="substring…"
+                    value={runSearch}
+                    onChange={(e) => setRunSearch(e.target.value)}
+                    style={{ minWidth: "10rem" }}
+                  />
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Sort</span>
+                  <select
+                    value={runSort}
+                    onChange={(e) => setRunSort(e.target.value as RunSort)}
+                  >
+                    <option value="newest">Newest first</option>
+                    <option value="val_loss_asc">Val loss (low → high)</option>
+                    <option value="val_loss_desc">Val loss (high → low)</option>
+                    <option value="train_loss_asc">Train loss (low → high)</option>
+                    <option value="train_loss_desc">Train loss (high → low)</option>
+                    <option value="test_bce_asc">Test BCE (low → high)</option>
+                    <option value="test_bce_desc">Test BCE (high → low)</option>
+                    <option value="path_asc">Path A–Z</option>
+                  </select>
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Updated</span>
+                  <select
+                    value={datePreset}
+                    onChange={(e) => setDatePreset(e.target.value as DatePreset)}
+                  >
+                    <option value="any">Any time</option>
+                    <option value="24h">Last 24h</option>
+                    <option value="7d">Last 7 days</option>
+                  </select>
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Min val loss</span>
+                  <input
+                    type="number"
+                    step={0.01}
+                    placeholder="—"
+                    value={valLossMin}
+                    onChange={(e) => setValLossMin(e.target.value)}
+                  />
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Max val loss</span>
+                  <input
+                    type="number"
+                    step={0.01}
+                    placeholder="—"
+                    value={valLossMax}
+                    onChange={(e) => setValLossMax(e.target.value)}
+                  />
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Min test BCE</span>
+                  <input
+                    type="number"
+                    step={0.001}
+                    placeholder="—"
+                    value={testBceMin}
+                    onChange={(e) => setTestBceMin(e.target.value)}
+                  />
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Max test BCE</span>
+                  <input
+                    type="number"
+                    step={0.001}
+                    placeholder="—"
+                    value={testBceMax}
+                    onChange={(e) => setTestBceMax(e.target.value)}
+                  />
+                </label>
+              </FormGrid>
+            </Disclosure>
             <div className="run-table-wrap">
               <table className="run-table">
                 <thead>
@@ -1135,22 +1165,26 @@ export default function App() {
           {detail && (
             <div className="panel">
               <h2>Run detail</h2>
-              <p className="hint" style={{ wordBreak: "break-all" }}>
+              <p className="hint" style={{ wordBreak: "break-all", marginTop: 0 }}>
                 {detail.run_path}
               </p>
               {detail.run_config && (
-                <div className="metric-grid" style={{ marginTop: "0.5rem" }}>
-                  <div className="metric-card">layers: {detail.run_config.layers.join(" → ")}</div>
-                  <div className="metric-card">lr: {detail.run_config.learning_rate}</div>
-                  <div className="metric-card">epochs (config): {detail.run_config.epochs}</div>
-                  <div className="metric-card">optimizer: {detail.run_config.optimizer}</div>
-                  <div className="metric-card">batch: {detail.run_config.batch_size || "full"}</div>
-                  <div className="metric-card">patience: {detail.run_config.patience}</div>
-                </div>
+                <Disclosure title="Run configuration" defaultOpen>
+                  <div className="metric-grid" style={{ marginTop: "var(--space-2)" }}>
+                    <div className="metric-card">layers: {detail.run_config.layers.join(" → ")}</div>
+                    <div className="metric-card">lr: {detail.run_config.learning_rate}</div>
+                    <div className="metric-card">epochs (config): {detail.run_config.epochs}</div>
+                    <div className="metric-card">optimizer: {detail.run_config.optimizer}</div>
+                    <div className="metric-card">batch: {detail.run_config.batch_size || "full"}</div>
+                    <div className="metric-card">patience: {detail.run_config.patience}</div>
+                  </div>
+                </Disclosure>
               )}
 
               <div className="slider-row">
-                <label>Epoch (replay)</label>
+                <label className="field-label" style={{ flexShrink: 0 }}>
+                  <span className="field-label-row">Epoch (replay)</span>
+                </label>
                 <input
                   type="range"
                   min={1}
@@ -1158,11 +1192,15 @@ export default function App() {
                   value={epochCap}
                   onChange={(e) => setEpochCap(Number(e.target.value))}
                 />
-                <span className="hint">
+                <span className="hint" style={{ margin: 0, flexShrink: 0 }}>
                   {epochCap} / {maxEpochs(detail.history)}
                 </span>
               </div>
-              {hint && <div className="annotation">{hint}</div>}
+              {hint && (
+                <Callout variant="insight" title="What this epoch suggests" icon={Lightbulb}>
+                  <p>{hint}</p>
+                </Callout>
+              )}
 
               <h2>Loss</h2>
               <div className="chart-box">
@@ -1257,231 +1295,245 @@ export default function App() {
       {tab === "live" && (
         <div className="panel">
           <h2>Live training (SSE)</h2>
-          <p className="hint">
-            All fields match <code>POST /api/live/train</code>. Parent directory defaults to the toolbar
-            &quot;Runs root&quot; when left empty. If you set a test CSV, the run is saved and test BCE is
-            streamed after training.
-          </p>
-          <div className="row" style={{ flexDirection: "column", alignItems: "stretch", gap: "0.65rem" }}>
-            <DatasetCsvPickRow
-              label="Train CSV path"
-              pathValue={dataTrainPath}
-              onPathChange={setDataTrainPath}
-              scanRoot={datasetsScanRoot}
-              relativeFiles={datasetCsvFiles}
-            />
-            <label>
-              Parent dir (saved runs / live output) — empty = use toolbar Runs root (
-              <code>{runsRoot}</code>){" "}
-              <input
-                type="text"
-                value={liveParentDir}
-                onChange={(e) => setLiveParentDir(e.target.value)}
-                placeholder={runsRoot}
-                style={{ width: "100%", maxWidth: "32rem" }}
-              />
-            </label>
-            <div className="row" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
-              <label>
-                Val ratio (train split)
-                <input
-                  type="number"
-                  step={0.05}
-                  min={0.05}
-                  max={0.49}
-                  value={liveValRatio}
-                  onChange={(e) => setLiveValRatio(Number(e.target.value))}
-                  style={{ width: "5.5rem" }}
+          <Disclosure title="How live training works">
+            <p className="hint" style={{ marginTop: "var(--space-2)" }}>
+              All fields match <code>POST /api/live/train</code>. Parent directory defaults to the toolbar
+              &quot;Runs root&quot; when left empty. If you set a test CSV, the run is saved and test BCE is
+              streamed after training.
+            </p>
+          </Disclosure>
+          <FormStack>
+            <Disclosure title="Paths" defaultOpen>
+              <FormStack>
+                <DatasetCsvPickRow
+                  idPrefix="live-train"
+                  label="Train CSV path"
+                  pathValue={dataTrainPath}
+                  onPathChange={setDataTrainPath}
+                  scanRoot={datasetsScanRoot}
+                  relativeFiles={datasetCsvFiles}
                 />
-              </label>
-              <label>
-                Preset
-                <select
-                  value={liveValRatioPreset}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v) setLiveValRatio(Number(v));
-                    setLiveValRatioPreset("");
-                  }}
-                >
-                  <option value="">—</option>
-                  {LIVE_VAL_RATIO_PRESETS.map((p) => (
-                    <option key={p.value} value={String(p.value)}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="row" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
-              <label>
-                Hidden layers (comma-separated widths, min 2)
-                <input
-                  type="text"
-                  value={liveLayersStr}
-                  onChange={(e) => setLiveLayersStr(e.target.value)}
-                  placeholder="24,24,12"
-                  style={{ width: "12rem" }}
+                <div>
+                  <FieldLabel htmlFor="live-parent-dir" icon={FolderOpen}>
+                    Parent dir (saved runs / live output) — empty = toolbar Runs root ({runsRoot})
+                  </FieldLabel>
+                  <input
+                    id="live-parent-dir"
+                    type="text"
+                    value={liveParentDir}
+                    onChange={(e) => setLiveParentDir(e.target.value)}
+                    placeholder={runsRoot}
+                    style={{ width: "100%", maxWidth: "32rem", marginTop: "var(--space-1)" }}
+                  />
+                </div>
+                <DatasetCsvPickRow
+                  idPrefix="live-test"
+                  label="Optional test CSV (binary CE after train; persists model)"
+                  pathValue={dataTestPath}
+                  onPathChange={setDataTestPath}
+                  scanRoot={datasetsScanRoot}
+                  relativeFiles={datasetCsvFiles}
+                  inputPlaceholder="Leave empty to skip test eval"
                 />
-              </label>
-              <label>
-                Architecture preset
-                <select
-                  value={liveLayerPreset}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v) setLiveLayersStr(v);
-                    setLiveLayerPreset("");
-                  }}
-                >
-                  <option value="">—</option>
-                  {LIVE_LAYER_PRESETS.map((p) => (
-                    <option key={p.value} value={p.value}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <DatasetCsvPickRow
-              label="Optional test CSV (binary CE after train; persists model)"
-              pathValue={dataTestPath}
-              onPathChange={setDataTestPath}
-              scanRoot={datasetsScanRoot}
-              relativeFiles={datasetCsvFiles}
-              inputPlaceholder="Leave empty to skip test eval"
-            />
-            <div className="row" style={{ flexWrap: "wrap" }}>
-              <label>
-                Epochs{" "}
-                <input
-                  type="number"
-                  min={1}
-                  value={liveEpochs}
-                  onChange={(e) => setLiveEpochs(Number(e.target.value))}
-                />
-              </label>
-              <label>
-                Learning rate{" "}
-                <input
-                  type="number"
-                  step={0.001}
-                  min={0.0001}
-                  value={liveLr}
-                  onChange={(e) => setLiveLr(Number(e.target.value))}
-                />
-              </label>
-              <label>
-                Seed{" "}
-                <input
-                  type="number"
-                  value={liveSeed}
-                  onChange={(e) => setLiveSeed(Number(e.target.value))}
-                  style={{ width: "5rem" }}
-                />
-              </label>
-              <label>
-                Seed preset
-                <select
-                  value={liveSeedPreset}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v !== "") setLiveSeed(Number(v));
-                    setLiveSeedPreset("");
-                  }}
-                >
-                  <option value="">—</option>
-                  {LIVE_SEED_PRESETS.map((p) => (
-                    <option key={p.value} value={String(p.value)}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="row" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
-              <label>
-                Batch size (0 = full batch){" "}
-                <input
-                  type="number"
-                  min={0}
-                  value={liveBatch}
-                  onChange={(e) => setLiveBatch(Number(e.target.value))}
-                  style={{ width: "5rem" }}
-                />
-              </label>
-              <label>
-                Batch preset
-                <select
-                  value={liveBatchPreset}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v !== "") setLiveBatch(Number(v));
-                    setLiveBatchPreset("");
-                  }}
-                >
-                  <option value="">—</option>
-                  {LIVE_BATCH_PRESETS.map((p) => (
-                    <option key={p.label} value={String(p.value)}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Optimizer{" "}
-                <select
-                  value={liveOptimizer}
-                  onChange={(e) => setLiveOptimizer(e.target.value as "sgd" | "rmsprop")}
-                >
-                  <option value="rmsprop">rmsprop</option>
-                  <option value="sgd">sgd</option>
-                </select>
-              </label>
-              <label>
-                Patience (early stopping, 0 = off){" "}
-                <input
-                  type="number"
-                  min={0}
-                  value={livePatience}
-                  onChange={(e) => setLivePatience(Number(e.target.value))}
-                  style={{ width: "4.5rem" }}
-                />
-              </label>
-              <label>
-                Batch telemetry every N{" "}
-                <input
-                  type="number"
-                  min={1}
-                  value={liveSample}
-                  onChange={(e) => setLiveSample(Number(e.target.value))}
-                  style={{ width: "4rem" }}
-                />
-              </label>
-            </div>
-            <label className="hint" style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start" }}>
+              </FormStack>
+            </Disclosure>
+            <Disclosure title="Data split" defaultOpen>
+              <FormGrid>
+                <label className="field-label">
+                  <span className="field-label-row">Val ratio (train split)</span>
+                  <input
+                    type="number"
+                    step={0.05}
+                    min={0.05}
+                    max={0.49}
+                    value={liveValRatio}
+                    onChange={(e) => setLiveValRatio(Number(e.target.value))}
+                  />
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Preset</span>
+                  <select
+                    value={liveValRatioPreset}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v) setLiveValRatio(Number(v));
+                      setLiveValRatioPreset("");
+                    }}
+                  >
+                    <option value="">—</option>
+                    {LIVE_VAL_RATIO_PRESETS.map((p) => (
+                      <option key={p.value} value={String(p.value)}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </FormGrid>
+            </Disclosure>
+            <Disclosure title="Architecture" defaultOpen>
+              <FormGrid>
+                <label className="field-label">
+                  <span className="field-label-row">Hidden layers (comma widths, min 2)</span>
+                  <input
+                    type="text"
+                    value={liveLayersStr}
+                    onChange={(e) => setLiveLayersStr(e.target.value)}
+                    placeholder="24,24,12"
+                  />
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Architecture preset</span>
+                  <select
+                    value={liveLayerPreset}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v) setLiveLayersStr(v);
+                      setLiveLayerPreset("");
+                    }}
+                  >
+                    <option value="">—</option>
+                    {LIVE_LAYER_PRESETS.map((p) => (
+                      <option key={p.value} value={p.value}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </FormGrid>
+            </Disclosure>
+            <Disclosure title="Training" defaultOpen>
+              <FormGrid wide>
+                <label className="field-label">
+                  <span className="field-label-row">Epochs</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={liveEpochs}
+                    onChange={(e) => setLiveEpochs(Number(e.target.value))}
+                  />
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Learning rate</span>
+                  <input
+                    type="number"
+                    step={0.001}
+                    min={0.0001}
+                    value={liveLr}
+                    onChange={(e) => setLiveLr(Number(e.target.value))}
+                  />
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Seed</span>
+                  <input
+                    type="number"
+                    value={liveSeed}
+                    onChange={(e) => setLiveSeed(Number(e.target.value))}
+                  />
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Seed preset</span>
+                  <select
+                    value={liveSeedPreset}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v !== "") setLiveSeed(Number(v));
+                      setLiveSeedPreset("");
+                    }}
+                  >
+                    <option value="">—</option>
+                    {LIVE_SEED_PRESETS.map((p) => (
+                      <option key={p.value} value={String(p.value)}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Batch size (0 = full)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={liveBatch}
+                    onChange={(e) => setLiveBatch(Number(e.target.value))}
+                  />
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Batch preset</span>
+                  <select
+                    value={liveBatchPreset}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v !== "") setLiveBatch(Number(v));
+                      setLiveBatchPreset("");
+                    }}
+                  >
+                    <option value="">—</option>
+                    {LIVE_BATCH_PRESETS.map((p) => (
+                      <option key={p.label} value={String(p.value)}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Optimizer</span>
+                  <select
+                    value={liveOptimizer}
+                    onChange={(e) => setLiveOptimizer(e.target.value as "sgd" | "rmsprop")}
+                  >
+                    <option value="rmsprop">rmsprop</option>
+                    <option value="sgd">sgd</option>
+                  </select>
+                </label>
+                <label className="field-label">
+                  <span className="field-label-row">Patience (0 = off)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={livePatience}
+                    onChange={(e) => setLivePatience(Number(e.target.value))}
+                  />
+                </label>
+              </FormGrid>
+            </Disclosure>
+            <Disclosure title="Advanced">
+              <FormGrid>
+                <label className="field-label">
+                  <span className="field-label-row">Batch telemetry every N</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={liveSample}
+                    onChange={(e) => setLiveSample(Number(e.target.value))}
+                  />
+                </label>
+              </FormGrid>
+            </Disclosure>
+            <Callout variant="info" title="Lesson replay" icon={GraduationCap}>
+              <p>
+                When enabled below, start live training as usual. When training finishes, a fullscreen replay
+                opens automatically. Micro-steps are capped on the server so large runs do not freeze the
+                browser.
+              </p>
+            </Callout>
+            <label
+              className="field-label"
+              style={{ flexDirection: "row", alignItems: "center", gap: "var(--space-2)" }}
+            >
               <input
                 type="checkbox"
                 checked={liveLessonMode}
                 onChange={(e) => setLiveLessonMode(e.target.checked)}
                 disabled={liveBusy}
-                style={{ marginTop: "0.2rem" }}
               />
-              <span>
-                <strong>Lesson mode</strong> — check this before &quot;Start live training&quot;. When training
-                finishes, a fullscreen replay opens automatically (no extra button). Micro-steps are capped on
-                the server so huge runs do not freeze the browser.
+              <span className="field-label-row" style={{ color: "var(--text)" }}>
+                Enable lesson replay
               </span>
             </label>
             <button type="button" disabled={liveBusy} onClick={() => void startLive()}>
               {liveBusy ? "Training…" : "Start live training"}
             </button>
-            <ul className="hint">
-              {liveLog.map((line, i) => (
-                <li key={i}>{line}</li>
-              ))}
-            </ul>
-          </div>
+          </FormStack>
 
           {liveTestEval && (
             <div className="metric-grid" style={{ marginTop: "0.75rem" }}>
@@ -1570,6 +1622,8 @@ export default function App() {
               </div>
             </>
           )}
+
+          <LogPanel lines={liveLog} title="Live event log" />
         </div>
       )}
 

@@ -596,12 +596,10 @@ export default function FullscreenLessonPlayback({ manifest, steps, onClose }: P
         }
         .flp-explain {
           margin: 0;
-          max-width: 56rem;
+          max-width: none;
           line-height: 1.5;
           color: #c5cad6;
           font-size: 0.95rem;
-          height: 4.65rem;
-          overflow-y: auto;
           flex-shrink: 0;
         }
         .flp-close {
