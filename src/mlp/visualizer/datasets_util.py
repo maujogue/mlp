@@ -15,7 +15,9 @@ def resolve_under_cwd(path: Path | str, *, cwd: Path | None = None) -> Path:
     try:
         target.relative_to(base)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail="Path must be under project directory") from e
+        raise HTTPException(
+            status_code=400, detail="Path must be under project directory"
+        ) from e
     return target
 
 
@@ -26,7 +28,9 @@ def resolve_datasets_root(root: str, *, cwd: Path | None = None) -> Path:
     try:
         out.relative_to(base)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail="datasets root must be under project directory") from e
+        raise HTTPException(
+            status_code=400, detail="datasets root must be under project directory"
+        ) from e
     if not out.is_dir():
         raise HTTPException(status_code=404, detail=f"Not a directory: {out}")
     return out

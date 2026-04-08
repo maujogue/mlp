@@ -74,6 +74,16 @@ class LiveTrainRequest(BaseModel):
         default=None,
         description="If set, persist artifacts and emit test_eval SSE (binary CE on this CSV)",
     )
+    lesson_mode: bool = Field(
+        default=False,
+        description="Record micro-step replay during training; opens fullscreen viewer when done.",
+    )
+    lesson_max_micro_steps: int = Field(
+        default=25_000,
+        ge=500,
+        le=500_000,
+        description="Reject live train if estimated micro-steps exceed this (protects browser/SSE).",
+    )
 
 
 class LiveTrainResponse(BaseModel):
@@ -103,7 +113,9 @@ class LiveBestResponse(BaseModel):
 class EvaluateTestRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    root: Path = Field(default=Path("temp"), description="Runs root (same as /api/runs)")
+    root: Path = Field(
+        default=Path("temp"), description="Runs root (same as /api/runs)"
+    )
     test_path: Path
     run_paths: list[str] = Field(
         min_length=1,
@@ -175,6 +187,20 @@ def training_run_config_from_live(req: LiveTrainRequest) -> TrainingRunConfig:
         patience=req.patience,
         parent_dir=parent.resolve(),
     )
+
+
+class LessonLossSliceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    root: Path = Field(default=Path("lesson_replays"))
+    replay_path: str = Field(
+        description="Folder name under `root`, or an absolute run directory containing `lesson_replay/`.",
+    )
+    step_index: int = Field(ge=0)
+    param_i: int = Field(ge=0)
+    param_j: int = Field(ge=0)
+    grid_half_extent: float = Field(default=0.35, gt=0.0)
+    grid_n: int = Field(default=17, ge=5, le=41)
 
 
 def training_run_config_for_best_search(req: LiveBestRequest) -> TrainingRunConfig:

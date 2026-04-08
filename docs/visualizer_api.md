@@ -166,6 +166,8 @@ JSON body (`LiveTrainRequest`):
 | `parent_dir` | string | no | Run parent dir; default `temp`. |
 | `telemetry_sample_every_n_batches` | int | no | `1` = every batch; `N` = every Nth batch only. |
 | `eval_test_path` | string | no | If set, saves the run to disk and evaluates on this CSV; SSE includes `test_eval` before `done`. |
+| `lesson_mode` | bool | no | Default `false`. When `true`, records a micro-step replay during training and defers the SSE `done` until after `fit` completes. |
+| `lesson_max_micro_steps` | int | no | Default `25000` (min `500`, max `500000`). If the estimated replay size exceeds this, the API returns **400** — reduce epochs, use a larger batch, or raise the cap. |
 
 Response: `{ "session_id": "<uuid>" }`
 
@@ -184,8 +186,20 @@ Event types (`type` field inside JSON):
 | `batch` | `epoch`, `batch_index`, `n_batches`, `loss`, `grad_norm_per_layer` (float[]), `weight_delta_norm_per_layer` (float[]) |
 | `epoch` | `epoch`, `train` (TrainingMetrics-like dict), `val` (optional same shape) |
 | `test_eval` | `loss`, `accuracy`, `precision`, `recall`, `f1`, `test_path`, `run_dir` (only when `eval_test_path` was set; sent before `done`) |
-| `done` | `elapsed_seconds`, `epochs_ran`, optional `history` (epoch arrays summary) |
+| `done` | `elapsed_seconds`, `epochs_ran`, optional `history` (epoch arrays summary). With `lesson_mode`: may include `lesson_manifest` and `lesson_steps` inline when the serialized payload is small; otherwise `lesson_replay_run_dir` (absolute path under the server CWD) so the client can load replay files via `GET /api/live/lesson-replay`. |
 | `error` | `message` (string) |
+
+When `lesson_mode` is **true** (or when `eval_test_path` is set), **`done` is emitted only after training finishes** (not immediately at thread start), so the client should wait for `done` before treating the session as complete.
+
+### `GET /api/live/lesson-replay`
+
+Query:
+
+| Name | Type | Description |
+|------|------|-------------|
+| `run_dir` | string | Run directory that contains a `lesson_replay/` folder with `replay_manifest.json` and `replay_steps.jsonl` (path relative to process CWD or absolute, must stay under CWD). |
+
+Response: `{ "lesson_manifest": { ... }, "lesson_steps": [ ... ] }` — same shapes as the optional inline fields on SSE `done`.
 
 ---
 
@@ -218,6 +232,20 @@ Same framing as live training SSE. Event types:
 | `grid_final` | `parent_dir`, `best_run_dir`, `summary` (full `best_summary.json` object) |
 | `done` | (empty object) |
 | `error` | `message` |
+
+---
+
+## Lesson loss slice (optional experiment API)
+
+### `POST /api/lesson/loss-slice`
+
+JSON body: `root`, `replay_path`, `step_index`, `param_i`, `param_j`, `grid_half_extent`, `grid_n`.
+
+- Set `replay_path` to a **folder name** under `root` (default `lesson_replays`), or to an **absolute path** to a directory that already contains `replay_manifest.json` / steps (or a run directory whose `lesson_replay/` subfolder does), resolved under the server’s current working directory.
+
+Evaluates mean training loss on the manifest’s toy points (when `toy_points` are present in the manifest) while varying two scalars in the flattened weight vector; other parameters stay fixed at the snapshot implied by micro-steps up to `step_index`. For **tabular** replays from live `lesson_mode`, toy points may be absent — this endpoint is mainly useful when the manifest includes toy geometry.
+
+Response: `{ "param_i", "param_j", "center_i", "center_j", "x_axis", "y_axis", "z", "n_params" }` where `z` is a 2D grid of loss values.
 
 ---
 

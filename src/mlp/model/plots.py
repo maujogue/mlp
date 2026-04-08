@@ -155,4 +155,6 @@ def plot_comparison(
         plt.close()
 
     if save_path is None:
-        print(f"Comparison plots saved under {save_dir.resolve()} (non-interactive backend).")
+        print(
+            f"Comparison plots saved under {save_dir.resolve()} (non-interactive backend)."
+        )

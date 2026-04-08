@@ -21,7 +21,7 @@ class TrainingRunConfig(BaseModel):
 
     train_path: Path
     val_ratio: float = Field(ge=0.0, lt=1.0)
-    layers: list[int] = Field(default=[], min_length=2)
+    layers: list[int] = Field(default=[], min_length=1)
     epochs: int = Field(default=0, gt=0)
     learning_rate: float = Field(default=0.0, gt=0.0)
     seed: int = Field(default=42)

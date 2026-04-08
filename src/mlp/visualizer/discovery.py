@@ -59,29 +59,25 @@ def list_runs(runs_root: Path) -> list[RunListItem]:
             mtime_ms = int(hist.stat().st_mtime * 1000)
         except OSError:
             mtime_ms = None
-        cfg_fields: dict[str, str | int | float | None] = {
-            "config_train_path": None,
-            "config_layers_str": None,
-            "config_epochs": None,
-            "config_learning_rate": None,
-            "config_seed": None,
-            "config_batch_size": None,
-            "config_optimizer": None,
-            "config_patience": None,
-        }
+        config_train_path: str | None = None
+        config_layers_str: str | None = None
+        config_epochs: int | None = None
+        config_learning_rate: float | None = None
+        config_seed: int | None = None
+        config_batch_size: int | None = None
+        config_optimizer: str | None = None
+        config_patience: int | None = None
         if cfg.is_file():
             try:
                 rc = load_run_config(run_dir)
-                cfg_fields = {
-                    "config_train_path": str(rc.train_path),
-                    "config_layers_str": "-".join(str(x) for x in rc.layers),
-                    "config_epochs": rc.epochs,
-                    "config_learning_rate": rc.learning_rate,
-                    "config_seed": rc.seed,
-                    "config_batch_size": rc.batch_size,
-                    "config_optimizer": rc.optimizer,
-                    "config_patience": rc.patience,
-                }
+                config_train_path = str(rc.train_path)
+                config_layers_str = "-".join(str(x) for x in rc.layers)
+                config_epochs = rc.epochs
+                config_learning_rate = rc.learning_rate
+                config_seed = rc.seed
+                config_batch_size = rc.batch_size
+                config_optimizer = rc.optimizer
+                config_patience = rc.patience
             except (OSError, ValueError, TypeError):
                 pass
         items.append(
@@ -97,7 +93,14 @@ def list_runs(runs_root: Path) -> list[RunListItem]:
                 final_train_loss=summary["final_train_loss"],
                 final_val_loss=summary["final_val_loss"],
                 history_mtime_ms=mtime_ms,
-                **cfg_fields,
+                config_train_path=config_train_path,
+                config_layers_str=config_layers_str,
+                config_epochs=config_epochs,
+                config_learning_rate=config_learning_rate,
+                config_seed=config_seed,
+                config_batch_size=config_batch_size,
+                config_optimizer=config_optimizer,
+                config_patience=config_patience,
             )
         )
     return items

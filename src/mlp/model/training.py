@@ -1,3 +1,4 @@
+import json
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -12,7 +13,7 @@ from ..data.data_engineering import (
 )
 from ..utils.constants import FEATURE_COLUMNS
 from ..utils.loader import build_run_dir, load_dataset
-from .mlp_classifier import MLPClassifier
+from .mlp_classifier import LESSON_REPLAY_ANCHOR_TRAIN_INDEX, MLPClassifier
 from .plots import save_learning_curves
 from .schemas import TrainingHistory, TrainingRunConfig
 from .telemetry import TrainingTelemetryOptions
@@ -21,6 +22,15 @@ from .serialization import (
     save_run_config,
     save_training_history,
 )
+
+from mlp.visualizer.replay_schemas import ReplayManifest
+from mlp.visualizer.replay_writer import (
+    LessonReplayWriter,
+    replay_step_to_jsonable,
+    tabular_explanation,
+)
+
+INLINE_LESSON_MAX_BYTES = 3_500_000
 
 
 def _load_and_prepare_train_val_arrays(
@@ -73,6 +83,7 @@ def run_training(
     telemetry: TrainingTelemetryOptions | None = None,
     save_artifacts: bool = True,
     after_save: Callable[[], None] | None = None,
+    lesson_mode: bool = False,
 ) -> TrainingHistory:
     """Load data, train model, optionally persist artifacts into ``run_dir``."""
     curves_dir: Path = run_dir / "figures"
@@ -91,6 +102,34 @@ def run_training(
         seed=run_config.seed,
     )
 
+    lesson_writer: LessonReplayWriter | None = None
+    lesson_final_manifest: ReplayManifest | None = None
+    if lesson_mode:
+        n_train_samples = int(len(X_train))
+        resolved_lesson_anchor = int(
+            min(LESSON_REPLAY_ANCHOR_TRAIN_INDEX, max(0, n_train_samples - 1)),
+        )
+        lesson_dir = run_dir / "lesson_replay"
+        lesson_writer = LessonReplayWriter(
+            lesson_dir,
+            run_id=run_dir.name,
+            explain=tabular_explanation,
+        )
+        lesson_writer.emit_raw(
+            {
+                "phase": "init",
+                "toc_id": "init",
+                "epoch": 0,
+                "batch": 0,
+                "sample_in_batch": 0,
+                "lesson_anchor_train_index": resolved_lesson_anchor,
+                "lesson_trace_this_batch": None,
+                "explanation": tabular_explanation(
+                    {"phase": "init", "lesson_anchor_train_index": resolved_lesson_anchor},
+                ),
+            },
+        )
+
     start_time = time.perf_counter()
     history: TrainingHistory = model.fit(
         X_train,
@@ -99,9 +138,40 @@ def run_training(
         y_val=y_val,
         run_config=run_config,
         telemetry=telemetry,
+        lesson_hook=lesson_writer.emit_raw if lesson_writer else None,
+        on_lesson_batch_end=lesson_writer.note_batch_completed
+        if lesson_writer
+        else None,
+        on_lesson_epoch_end=lesson_writer.end_epoch if lesson_writer else None,
     )
 
     elapsed_seconds = time.perf_counter() - start_time
+    if lesson_writer is not None:
+        manifest = ReplayManifest(
+            run_id=run_dir.name,
+            input_dim=len(FEATURE_COLUMNS),
+            layer_sizes=list(run_config.layers),
+            n_classes=2,
+            activation=model._activation,
+            optimizer=run_config.optimizer,
+            learning_rate=float(run_config.learning_rate),
+            rmsprop_decay=0.99 if run_config.optimizer == "rmsprop" else None,
+            rmsprop_eps=1e-8 if run_config.optimizer == "rmsprop" else None,
+            viz_mode="tabular",
+            viz_note=(
+                "Each example has many numeric inputs (scaled); the picture is the network, "
+                f"not the spreadsheet. Forward/loss/backward steps follow training row "
+                f"{resolved_lesson_anchor} whenever it appears in the minibatch; other batches "
+                "still train but only emit optimizer/batch-end in the replay."
+            ),
+            toy_points=None,
+            n_epochs=run_config.epochs,
+            total_micro_steps=0,
+            batches_per_epoch=[],
+            lesson_anchor_train_index=resolved_lesson_anchor,
+        )
+        lesson_final_manifest = lesson_writer.write(manifest)
+
     if save_artifacts:
         save_model(model, model_path)
         save_learning_curves(history, curves_dir)
@@ -114,12 +184,22 @@ def run_training(
         and telemetry.callback is not None
         and telemetry.defer_fit_done_callback
     ):
-        telemetry.callback(
-            "done",
-            {
-                "elapsed_seconds": model.last_fit_seconds,
-                "epochs_ran": len(history.train_loss),
-                "history": history.model_dump(by_alias=True),
-            },
-        )
+        done_payload: dict = {
+            "elapsed_seconds": model.last_fit_seconds,
+            "epochs_ran": len(history.train_loss),
+            "history": history.model_dump(by_alias=True),
+        }
+        if lesson_writer is not None and lesson_final_manifest is not None:
+            m_dict = lesson_final_manifest.model_dump(mode="json")
+            steps_list = [replay_step_to_jsonable(s) for s in lesson_writer.steps]
+            try:
+                blob = json.dumps({"m": m_dict, "s": steps_list}).encode("utf-8")
+                if len(blob) <= INLINE_LESSON_MAX_BYTES:
+                    done_payload["lesson_manifest"] = m_dict
+                    done_payload["lesson_steps"] = steps_list
+                else:
+                    done_payload["lesson_replay_run_dir"] = str(run_dir.resolve())
+            except (TypeError, ValueError):
+                done_payload["lesson_replay_run_dir"] = str(run_dir.resolve())
+        telemetry.callback("done", done_payload)
     return history

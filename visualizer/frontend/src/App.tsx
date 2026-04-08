@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import FullscreenLessonPlayback from "./FullscreenLessonPlayback.tsx";
 import {
   CartesianGrid,
   Legend,
@@ -15,6 +16,8 @@ import { GridSearchPanel } from "./components/GridSearchPanel";
 import type {
   DatasetListResponse,
   EvaluateTestResponse,
+  LessonReplayManifest,
+  LessonReplayStep,
   RunDetailResponse,
   RunListItem,
   RunListResponse,
@@ -547,6 +550,11 @@ export default function App() {
   const [liveBatchPreset, setLiveBatchPreset] = useState("");
   const [liveSeedPreset, setLiveSeedPreset] = useState("");
   const [liveBusy, setLiveBusy] = useState(false);
+  const [liveLessonMode, setLiveLessonMode] = useState(false);
+  const [lessonPlayback, setLessonPlayback] = useState<{
+    manifest: LessonReplayManifest;
+    steps: LessonReplayStep[];
+  } | null>(null);
   const [liveLog, setLiveLog] = useState<string[]>([]);
   const [liveBatchPoints, setLiveBatchPoints] = useState<
     { step: number; loss: number; epoch: number }[]
@@ -588,9 +596,10 @@ export default function App() {
     setLiveEpochPoints([]);
     setLiveLastBatch(null);
     setLiveTestEval(null);
+    setLessonPlayback(null);
     try {
       const et = dataTestPath.trim();
-      const body: Record<string, string | number | number[] | undefined> = {
+      const body: Record<string, string | number | boolean | number[] | undefined> = {
         train_path: dataTrainPath,
         parent_dir: liveParentDir.trim() || runsRoot,
         val_ratio: liveValRatio,
@@ -606,12 +615,24 @@ export default function App() {
       if (et) {
         body.eval_test_path = et;
       }
+      if (liveLessonMode) {
+        body.lesson_mode = true;
+      }
       const { session_id } = await fetchJson<{ session_id: string }>("/api/live/train", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      setLiveLog((l) => [...l, `session ${session_id}`]);
+      const wantLessonReplay = liveLessonMode;
+      setLiveLog((l) => [
+        ...l,
+        `session ${session_id}`,
+        ...(wantLessonReplay
+          ? [
+              "Lesson mode on — the fullscreen replay opens right after the \"done\" line (no extra click). If nothing happens, read any red error lines below.",
+            ]
+          : []),
+      ]);
       let step = 0;
       const es = new EventSource(`/api/live/stream/${session_id}`);
       es.onmessage = (ev) => {
@@ -656,13 +677,61 @@ export default function App() {
             ]);
             es.close();
             setLiveBusy(false);
+            const lm = msg.lesson_manifest;
+            const ls = msg.lesson_steps;
+            const rd = msg.lesson_replay_run_dir;
+            const stepsOk = Array.isArray(ls) && ls.length > 0;
+            if (lm != null && stepsOk) {
+              setLessonPlayback({ manifest: lm, steps: ls });
+              if (wantLessonReplay) {
+                setLiveLog((l) => [...l, "Lesson replay: opening fullscreen (data sent with done)."]);
+              }
+            } else if (rd) {
+              setLiveLog((l) => [...l, "Lesson replay: loading from disk (payload was large for SSE)…"]);
+              void (async () => {
+                try {
+                  const data = await fetchJson<{
+                    lesson_manifest: LessonReplayManifest;
+                    lesson_steps: LessonReplayStep[];
+                  }>(`/api/live/lesson-replay?run_dir=${encodeURIComponent(rd)}`);
+                  setLessonPlayback({
+                    manifest: data.lesson_manifest,
+                    steps: data.lesson_steps,
+                  });
+                  if (wantLessonReplay) {
+                    setLiveLog((l) => [...l, "Lesson replay: opening fullscreen (loaded from run_dir)."]);
+                  }
+                } catch (e) {
+                  setLiveLog((l) => [...l, `lesson replay fetch failed: ${String(e)}`]);
+                }
+              })();
+            }
+            if (wantLessonReplay) {
+              const hasPointer = (lm != null && stepsOk) || (rd != null && rd !== "");
+              if (!hasPointer) {
+                setLiveLog((l) => [
+                  ...l,
+                  "Lesson mode was on, but this \"done\" event had no lesson_manifest / lesson_steps / lesson_replay_run_dir. Use a current API build, or confirm the POST body included lesson_mode: true (see Network tab).",
+                ]);
+              }
+            }
           } else if (msg.type === "error") {
             setLiveLog((l) => [...l, `error: ${msg.message}`]);
             es.close();
             setLiveBusy(false);
           }
-        } catch {
-          /* ignore */
+        } catch (err) {
+          const n = ev.data?.length ?? 0;
+          setLiveLog((l) => [
+            ...l,
+            `SSE parse error (${n} chars): ${err instanceof Error ? err.message : String(err)}`,
+          ]);
+          if (wantLessonReplay) {
+            setLiveLog((l) => [
+              ...l,
+              "Lesson mode: this usually means the \"done\" event was not valid JSON in the browser (e.g. NaN/Infinity in older server responses). Restart the visualizer API and hard-refresh the page.",
+            ]);
+          }
         }
       };
       es.onerror = () => {
@@ -1390,6 +1459,20 @@ export default function App() {
                 />
               </label>
             </div>
+            <label className="hint" style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start" }}>
+              <input
+                type="checkbox"
+                checked={liveLessonMode}
+                onChange={(e) => setLiveLessonMode(e.target.checked)}
+                disabled={liveBusy}
+                style={{ marginTop: "0.2rem" }}
+              />
+              <span>
+                <strong>Lesson mode</strong> — check this before &quot;Start live training&quot;. When training
+                finishes, a fullscreen replay opens automatically (no extra button). Micro-steps are capped on
+                the server so huge runs do not freeze the browser.
+              </span>
+            </label>
             <button type="button" disabled={liveBusy} onClick={() => void startLive()}>
               {liveBusy ? "Training…" : "Start live training"}
             </button>
@@ -1501,6 +1584,14 @@ export default function App() {
           onTestPathsRawChange={setGridTestPathsRaw}
           datasetsScanRoot={datasetsScanRoot}
           datasetCsvFiles={datasetCsvFiles}
+        />
+      )}
+
+      {lessonPlayback && (
+        <FullscreenLessonPlayback
+          manifest={lessonPlayback.manifest}
+          steps={lessonPlayback.steps}
+          onClose={() => setLessonPlayback(null)}
         />
       )}
     </div>

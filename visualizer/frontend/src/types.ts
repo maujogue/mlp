@@ -122,6 +122,9 @@ export type SseEvent =
       elapsed_seconds: number;
       epochs_ran: number;
       history: TrainingHistoryJson;
+      lesson_manifest?: LessonReplayManifest;
+      lesson_steps?: LessonReplayStep[];
+      lesson_replay_run_dir?: string;
     }
   | {
       type: "test_eval";
@@ -137,6 +140,101 @@ export type SseEvent =
 
 /** best_summary-shaped object streamed during grid search */
 export type BestSummaryPayload = Record<string, unknown>;
+
+/** Lesson replay (replay_manifest.json) */
+export interface LessonToyPoint {
+  x0: number;
+  x1: number;
+  y: number;
+}
+
+export interface LessonTocEntry {
+  toc_id: string;
+  label: string;
+  step_index: number;
+}
+
+export interface LessonReplayManifest {
+  schema_version: number;
+  run_id: string;
+  created_at: string;
+  input_dim: number;
+  layer_sizes: number[];
+  n_classes: number;
+  activation: "relu" | "sigmoid";
+  loss: string;
+  optimizer: "sgd" | "rmsprop";
+  learning_rate: number;
+  rmsprop_decay: number | null;
+  rmsprop_eps: number | null;
+  viz_mode: "toy2d" | "two_features" | "pca2" | "tabular" | string;
+  viz_note: string | null;
+  toy_points: LessonToyPoint[] | null;
+  n_epochs: number;
+  batches_per_epoch: number[];
+  total_micro_steps: number;
+  toc_entries: LessonTocEntry[];
+  steps_file: string;
+  /** Training matrix row (fixed order) used for forward/loss/backward replay when in batch. */
+  lesson_anchor_train_index?: number | null;
+}
+
+export interface LessonOptimizerLayerState {
+  layer: number;
+  grad_W?: number[][];
+  grad_b?: number[];
+  rms_W?: number[][];
+  rms_b?: number[];
+  effective_scale_W?: number[][];
+  effective_scale_b?: number[];
+  delta_W?: number[][];
+  delta_b?: number[];
+}
+
+export type LessonPhase =
+  | "init"
+  | "forward_input"
+  | "forward_layer"
+  | "activation"
+  | "loss"
+  | "backward_layer"
+  | "optimizer"
+  | "batch_end"
+  | "epoch_end";
+
+export interface LessonReplayStep {
+  step_index: number;
+  phase: LessonPhase;
+  epoch: number;
+  batch: number;
+  sample_in_batch: number;
+  layer?: number | null;
+  toc_id: string;
+  explanation: string;
+  math?: string | null;
+  a_in?: number[] | null;
+  W?: number[][] | null;
+  b?: number[] | null;
+  z?: number[] | null;
+  a_out?: number[] | null;
+  edge_contributions?: number[][] | null;
+  logits?: number[] | null;
+  probs?: number[] | null;
+  label?: number | null;
+  loss_contribution?: number | null;
+  pred_class?: number | null;
+  correct?: boolean | null;
+  dL_dz?: number[] | null;
+  dL_da_in?: number[] | null;
+  dL_dW?: number[][] | null;
+  dL_db?: number[] | null;
+  optimizer_layers?: LessonOptimizerLayerState[] | null;
+  learning_rate?: number | null;
+  optimizer_name?: "sgd" | "rmsprop" | null;
+  loss_batch_mean?: number | null;
+  lesson_anchor_train_index?: number | null;
+  lesson_trace_this_batch?: boolean | null;
+}
 
 export type GridSseEvent =
   | {

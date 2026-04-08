@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
+import numbers
 import queue
 import threading
 import uuid
@@ -31,6 +33,7 @@ from .api_schemas import (
     DatasetListResponse,
     EvaluateTestRequest,
     EvaluateTestResponse,
+    LessonLossSliceRequest,
     LiveBestRequest,
     LiveBestResponse,
     LiveTrainRequest,
@@ -44,8 +47,38 @@ from .api_schemas import (
     training_run_config_for_best_search,
     training_run_config_from_live,
 )
-from .datasets_util import list_csv_under_datasets, resolve_datasets_root, resolve_under_cwd
+from .replay_slice import load_manifest, load_steps, loss_slice_grid
+from .datasets_util import (
+    list_csv_under_datasets,
+    resolve_datasets_root,
+    resolve_under_cwd,
+)
 from .discovery import list_runs, resolve_runs_root
+
+
+def _sse_json_obj_for_js(obj: Any) -> Any:
+    """Make values JSON-serializable for browsers: JSON.parse rejects NaN/Infinity."""
+    if type(obj) is bool:
+        return obj
+    if isinstance(obj, int):
+        return obj
+    if isinstance(obj, numbers.Real):
+        x = float(obj)
+        if math.isnan(x) or math.isinf(x):
+            return None
+        return x
+    if isinstance(obj, dict):
+        return {k: _sse_json_obj_for_js(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sse_json_obj_for_js(v) for v in obj]
+    if isinstance(obj, tuple):
+        return [_sse_json_obj_for_js(v) for v in obj]
+    return obj
+
+
+def _sse_message_json(event_type: str, payload: dict[str, Any]) -> str:
+    envelope: dict[str, Any] = {"type": event_type, **payload}
+    return json.dumps(_sse_json_obj_for_js(envelope), allow_nan=False)
 
 
 def create_app(*, static_dir: Path | None = None) -> FastAPI:
@@ -73,7 +106,9 @@ def create_app(*, static_dir: Path | None = None) -> FastAPI:
 
     @app.get("/api/datasets", response_model=DatasetListResponse)
     def api_datasets_list(
-        root: str = Query(default="datasets", description="Directory to scan for *.csv"),
+        root: str = Query(
+            default="datasets", description="Directory to scan for *.csv"
+        ),
     ) -> DatasetListResponse:
         d = resolve_datasets_root(root)
         files = list_csv_under_datasets(d)
@@ -179,6 +214,108 @@ def create_app(*, static_dir: Path | None = None) -> FastAPI:
                 results[rel] = {"error": str(e)}
         return EvaluateTestResponse(test_path=str(test_path), results=results)
 
+    def _resolve_lesson_root(root: str) -> Path:
+        p = Path(root)
+        if not p.is_absolute():
+            p = Path.cwd() / p
+        return p.resolve()
+
+    def _safe_lesson_replay_path(lesson_root: Path, rel_path: str) -> Path:
+        root_res = lesson_root.resolve()
+        target = (root_res / rel_path).resolve()
+        try:
+            target.relative_to(root_res)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=400, detail="Invalid lesson replay path"
+            ) from e
+        if not target.is_dir():
+            raise HTTPException(
+                status_code=404, detail="Lesson replay folder not found"
+            )
+        return target
+
+    def _cwd_safe_resolved(path: Path) -> Path:
+        cwd = Path.cwd().resolve()
+        p = path if path.is_absolute() else (cwd / path)
+        p = p.resolve()
+        try:
+            p.relative_to(cwd)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=400, detail="Path must be under process cwd"
+            ) from e
+        return p
+
+    def _resolve_lesson_replay_dir(body: LessonLossSliceRequest) -> Path:
+        rp = body.replay_path.strip()
+        p = Path(rp)
+        if p.is_absolute() or rp.startswith("~/"):
+            base = p.expanduser().resolve() if rp.startswith("~/") else p.resolve()
+            lr = base / "lesson_replay"
+            if (lr / "replay_manifest.json").is_file():
+                return _cwd_safe_resolved(lr)
+            if (base / "replay_manifest.json").is_file():
+                return _cwd_safe_resolved(base)
+            raise HTTPException(
+                status_code=404, detail="No replay_manifest.json at path"
+            )
+        lesson_root = _resolve_lesson_root(str(body.root))
+        return _safe_lesson_replay_path(lesson_root, rp)
+
+    @app.post("/api/lesson/loss-slice")
+    def api_lesson_loss_slice(body: LessonLossSliceRequest) -> dict[str, Any]:
+        run_dir = _resolve_lesson_replay_dir(body)
+        manifest = load_manifest(run_dir)
+        steps = load_steps(run_dir, manifest=manifest)
+        return loss_slice_grid(
+            manifest,
+            steps,
+            step_index=body.step_index,
+            param_i=body.param_i,
+            param_j=body.param_j,
+            grid_half_extent=body.grid_half_extent,
+            grid_n=body.grid_n,
+        )
+
+    @app.get("/api/live/lesson-replay")
+    def api_live_lesson_replay(
+        run_dir: str = Query(
+            ..., description="Run directory containing lesson_replay/"
+        ),
+    ) -> dict[str, Any]:
+        rd = _cwd_safe_resolved(Path(run_dir))
+        lr = rd / "lesson_replay"
+        if not (lr / "replay_manifest.json").is_file():
+            raise HTTPException(
+                status_code=404, detail="lesson_replay not found for this run"
+            )
+        manifest = load_manifest(lr)
+        steps = load_steps(lr, manifest=manifest)
+        return {
+            "lesson_manifest": manifest.model_dump(mode="json"),
+            "lesson_steps": steps,
+        }
+
+    def _count_csv_body_rows(train_path: Path) -> int:
+        try:
+            with open(train_path, encoding="utf-8", errors="replace") as f:
+                return max(0, sum(1 for _ in f) - 1)
+        except OSError:
+            return 0
+
+    def _estimate_lesson_micro_steps(body: LiveTrainRequest) -> int:
+        tp = body.train_path
+        p = tp.resolve() if tp.is_absolute() else (Path.cwd() / tp).resolve()
+        rows = _count_csv_body_rows(p)
+        train_n = max(1, int(rows * (1.0 - body.val_ratio)))
+        bs = body.batch_size if body.batch_size > 0 else train_n
+        n_batches = max(1, (train_n + bs - 1) // bs)
+        n_h = len(body.layers)
+        n_w = n_h + 1
+        per_batch = 1 + n_w + n_h + 1 + n_w + 2
+        return 1 + body.epochs * (n_batches * per_batch + 1)
+
     @app.get("/api/best-summary")
     def api_best_summary(
         parent: str = Query(..., description="Directory containing best_summary.json"),
@@ -192,13 +329,27 @@ def create_app(*, static_dir: Path | None = None) -> FastAPI:
 
     @app.post("/api/live/train", response_model=LiveTrainResponse)
     def api_live_train(body: LiveTrainRequest) -> LiveTrainResponse:
+        if body.lesson_mode:
+            est = _estimate_lesson_micro_steps(body)
+            if est > body.lesson_max_micro_steps:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Estimated lesson replay ({est} micro-steps) exceeds limit "
+                        f"({body.lesson_max_micro_steps}). Reduce epochs, increase batch size, "
+                        "or raise lesson_max_micro_steps."
+                    ),
+                )
         session_id = str(uuid.uuid4())
         q: queue.Queue[str] = queue.Queue()
         with live_lock:
             live_sessions[session_id] = q
 
         def emit(event_type: str, payload: dict) -> None:
-            msg = json.dumps({"type": event_type, **payload})
+            try:
+                msg = _sse_message_json(event_type, payload)
+            except (TypeError, ValueError) as e:
+                msg = _sse_message_json("error", {"message": f"SSE encode failed: {e}"})
             q.put(msg)
 
         def worker() -> None:
@@ -206,16 +357,22 @@ def create_app(*, static_dir: Path | None = None) -> FastAPI:
                 run_cfg = training_run_config_from_live(body)
                 run_dir = build_run_dir(run_cfg)
                 save = body.eval_test_path is not None
+                defer_done = save or body.lesson_mode
                 telemetry = TrainingTelemetryOptions(
                     callback=emit,
                     sample_every_n_batches=body.telemetry_sample_every_n_batches,
-                    defer_fit_done_callback=save,
+                    defer_fit_done_callback=defer_done,
                 )
+
                 def after_save() -> None:
                     if body.eval_test_path is None:
                         return
                     tp = body.eval_test_path
-                    tp = tp.resolve() if tp.is_absolute() else (Path.cwd() / tp).resolve()
+                    tp = (
+                        tp.resolve()
+                        if tp.is_absolute()
+                        else (Path.cwd() / tp).resolve()
+                    )
                     metrics = evaluate_model_on_dataset(run_dir, tp)
                     emit(
                         "test_eval",
@@ -232,6 +389,7 @@ def create_app(*, static_dir: Path | None = None) -> FastAPI:
                     telemetry=telemetry,
                     save_artifacts=save,
                     after_save=after_save if save else None,
+                    lesson_mode=body.lesson_mode,
                 )
             except Exception as e:  # noqa: BLE001 — surface to client
                 emit("error", {"message": str(e)})
@@ -256,7 +414,11 @@ def create_app(*, static_dir: Path | None = None) -> FastAPI:
             live_best_sessions[session_id] = q
 
         def emit(event_type: str, payload: dict[str, Any]) -> None:
-            q.put(json.dumps({"type": event_type, **payload}))
+            try:
+                msg = _sse_message_json(event_type, payload)
+            except (TypeError, ValueError) as e:
+                msg = _sse_message_json("error", {"message": f"SSE encode failed: {e}"})
+            q.put(msg)
 
         def worker() -> None:
             try:

@@ -11,6 +11,7 @@ wheels/
 datasets/
 figures/
 temp/
+lesson_replays/
 .DS_Store
 42_evaluation/
 
