@@ -6,10 +6,10 @@ all:
 	make type
 
 lint:
-	ruff check src/
+	uv run ruff check src/
 
 format:
-	ruff format src/
+	uv run ruff format src/
 
 type:
-	ty check
+	uv run ty check
