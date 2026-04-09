@@ -81,9 +81,9 @@ def main_train() -> None:
     parser.add_argument(
         "--layers",
         nargs="+",
-        default=[24, 24, 12],
+        default=[24, 24],
         type=int,
-        help="Hidden layer sizes (default: 24 24)",
+        help="Hidden layer widths (at least 2; default: 24 24)",
     )
     parser.add_argument(
         "--epochs",
@@ -95,7 +95,7 @@ def main_train() -> None:
         "--learning-rate",
         default=0.01,
         type=float,
-        help="Learning rate (default: 0.03)",
+        help="Learning rate (default: 0.01)",
     )
     parser.add_argument(
         "--seed",
@@ -118,7 +118,7 @@ def main_train() -> None:
     )
     parser.add_argument(
         "--patience",
-        default=10,
+        default=0,
         type=int,
         help="Early stopping: stop after N epochs without val_loss improvement; 0 = disabled (default: 0)",
     )
@@ -131,6 +131,10 @@ def main_train() -> None:
         help="Run hyperparameter grid and pick best run. Optional: one or more test CSV paths; if given, best models are ranked by average metrics on these sets (equal weight, less bias). Displays top 5 per metric.",
     )
     args = parser.parse_args()
+    if len(args.layers) < 2:
+        parser.error(
+            "--layers requires at least 2 hidden layer widths (multilayer perceptron subject)."
+        )
 
     from .model.compare import run_best_search
     from .model.schemas import TrainingRunConfig

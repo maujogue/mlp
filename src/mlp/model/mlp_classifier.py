@@ -65,8 +65,8 @@ class MLPClassifier:
         activation: str = "relu",
     ) -> None:
         hidden_layers = list(hidden_layers or [24, 24])
-        if len(hidden_layers) < 1:
-            raise ValueError("At least one hidden layer is required.")
+        if len(hidden_layers) < 2:
+            raise ValueError("At least two hidden layers are required.")
         if output_size != 2:
             raise ValueError("Only binary classification with 2 outputs is supported.")
 
@@ -375,7 +375,9 @@ class MLPClassifier:
                     X_batch = X_train_arr[batch_idx]
                     y_batch = y_train_arr[batch_idx]
                     anchor_idx = int(
-                        np.clip(LESSON_REPLAY_ANCHOR_TRAIN_INDEX, 0, max(0, n_train - 1)),
+                        np.clip(
+                            LESSON_REPLAY_ANCHOR_TRAIN_INDEX, 0, max(0, n_train - 1)
+                        ),
                     )
                     hits = np.flatnonzero(batch_idx == anchor_idx)
                     trace_this_batch = hits.size > 0

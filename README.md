@@ -68,7 +68,7 @@ mlp-train path/to/train.csv [options]
 |--------|--------|-------------|
 | `--layers` | `24 24` | Hidden layer sizes (space-separated) |
 | `--epochs` | `70` | Number of epochs |
-| `--learning-rate` | `0.03` | Learning rate |
+| `--learning-rate` | `0.01` | Learning rate |
 | `--val-ratio` | `0.2` | Fraction of train used for validation |
 | `--optimizer` | `sgd` | `sgd` or `rmsprop` |
 | `--batch-size` | `0` | Batch size; `0` = full dataset |

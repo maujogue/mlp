@@ -48,8 +48,8 @@ const COLORS = ["#3d7aed", "#e87872", "#5cb87a", "#e4b04a", "#b279a2", "#ff9da6"
 
 /** Hidden <select> option: apply preset to hidden layers string via onChange */
 const LIVE_LAYER_PRESETS: { label: string; value: string }[] = [
+  { label: "24, 24 (default)", value: "24,24" },
   { label: "24, 24, 12", value: "24,24,12" },
-  { label: "24, 24", value: "24,24" },
   { label: "32, 16", value: "32,16" },
   { label: "20, 10", value: "20,10" },
   { label: "16, 8", value: "16,8" },
@@ -555,7 +555,7 @@ export default function App() {
 
   const [liveParentDir, setLiveParentDir] = useState("");
   const [liveValRatio, setLiveValRatio] = useState(0.2);
-  const [liveLayersStr, setLiveLayersStr] = useState("24,24,12");
+  const [liveLayersStr, setLiveLayersStr] = useState("24,24");
   const [liveEpochs, setLiveEpochs] = useState(8);
   const [liveLr, setLiveLr] = useState(0.01);
   const [liveSeed, setLiveSeed] = useState(42);
@@ -1378,7 +1378,7 @@ export default function App() {
                     type="text"
                     value={liveLayersStr}
                     onChange={(e) => setLiveLayersStr(e.target.value)}
-                    placeholder="24,24,12"
+                    placeholder="24,24"
                   />
                 </label>
                 <label className="field-label">

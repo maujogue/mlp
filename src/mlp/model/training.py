@@ -125,7 +125,10 @@ def run_training(
                 "lesson_anchor_train_index": resolved_lesson_anchor,
                 "lesson_trace_this_batch": None,
                 "explanation": tabular_explanation(
-                    {"phase": "init", "lesson_anchor_train_index": resolved_lesson_anchor},
+                    {
+                        "phase": "init",
+                        "lesson_anchor_train_index": resolved_lesson_anchor,
+                    },
                 ),
             },
         )

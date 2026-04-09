@@ -31,7 +31,7 @@ class RunListItem(BaseModel):
     )
     config_layers_str: str | None = Field(
         default=None,
-        description="Hyphen-joined layer widths, e.g. 24-24-12",
+        description="Hyphen-joined layer widths, e.g. 24-24",
     )
     config_epochs: int | None = None
     config_learning_rate: float | None = None
@@ -61,7 +61,7 @@ class LiveTrainRequest(BaseModel):
 
     train_path: Path
     val_ratio: float = Field(default=0.2, ge=0.0, lt=1.0)
-    layers: list[int] = Field(default_factory=lambda: [24, 24, 12], min_length=2)
+    layers: list[int] = Field(default_factory=lambda: [24, 24], min_length=2)
     epochs: int = Field(default=70, gt=0)
     learning_rate: float = Field(default=0.01, gt=0.0)
     seed: int = 42

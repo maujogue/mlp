@@ -37,10 +37,16 @@ def main() -> None:
     parser.add_argument("--optimizer", default="rmsprop", choices=["sgd", "rmsprop"])
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
-        "--layers", type=int, nargs="+", default=[32, 16], help="Hidden layer sizes"
+        "--layers",
+        type=int,
+        nargs="+",
+        default=[32, 16],
+        help="Hidden layer sizes (at least 2)",
     )
     parser.add_argument("--patience", type=int, default=0, help="Patience")
     args = parser.parse_args()
+    if len(args.layers) < 2:
+        parser.error("--layers requires at least 2 hidden layer widths.")
 
     # Load and prepare data (same pipeline as train_cmd)
     path: Path = args.data_path
