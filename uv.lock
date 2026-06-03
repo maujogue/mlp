@@ -248,6 +248,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "matplotlib" },
+    { name = "mlp-core" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "pydantic" },
@@ -266,6 +267,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "matplotlib", specifier = ">=3.10.8" },
+    { name = "mlp-core", git = "https://github.com/maujogue/mlp-core.git" },
     { name = "numpy", specifier = ">=2.4.2" },
     { name = "pandas", specifier = ">=3.0.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
@@ -278,6 +280,14 @@ requires-dist = [
 dev = [
     { name = "ruff", specifier = ">=0.15.0" },
     { name = "ty", specifier = ">=0.0.15" },
+]
+
+[[package]]
+name = "mlp-core"
+version = "0.1.0"
+source = { git = "https://github.com/maujogue/mlp-core.git#dfa3c133828ee85fad1a27a1c802c6125853ff48" }
+dependencies = [
+    { name = "numpy" },
 ]
 
 [[package]]

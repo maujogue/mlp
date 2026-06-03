@@ -87,7 +87,7 @@ def main() -> None:
     )
     # ReLU
     model_relu = MLPClassifier(
-        n_features=n_features,
+        input_size=n_features,
         hidden_layers=hidden,
         output_size=2,
         activation="relu",
@@ -101,7 +101,7 @@ def main() -> None:
 
     # Sigmoid
     model_sigmoid = MLPClassifier(
-        n_features=n_features,
+        input_size=n_features,
         hidden_layers=hidden,
         output_size=2,
         seed=args.seed,

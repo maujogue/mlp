@@ -96,7 +96,7 @@ def run_training(
     )
 
     model = MLPClassifier(
-        n_features=len(FEATURE_COLUMNS),
+        input_size=len(FEATURE_COLUMNS),
         hidden_layers=run_config.layers,
         output_size=2,
         seed=run_config.seed,

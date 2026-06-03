@@ -46,6 +46,45 @@ def precision_recall_f1(
     return precision, recall, f1
 
 
+def multiclass_precision_recall_f1(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    n_classes: int,
+) -> tuple[float, float, float]:
+    """Macro precision, recall, and F1 for integer class labels."""
+    precision_sum = 0.0
+    recall_sum = 0.0
+    f1_sum = 0.0
+    for class_idx in range(n_classes):
+        pred_class = y_pred == class_idx
+        true_class = y_true == class_idx
+        tp = float(np.sum(pred_class & true_class))
+        fp = float(np.sum(pred_class & ~true_class))
+        fn = float(np.sum(~pred_class & true_class))
+        precision = tp / (tp + fp) if (tp + fp) > 0.0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0.0 else 0.0
+        f1 = (
+            2.0 * precision * recall / (precision + recall)
+            if (precision + recall) > 0.0
+            else 0.0
+        )
+        precision_sum += precision
+        recall_sum += recall
+        f1_sum += f1
+    return precision_sum / n_classes, recall_sum / n_classes, f1_sum / n_classes
+
+
+def softmax_cross_entropy_from_probabilities(
+    y_true: np.ndarray,
+    probabilities: np.ndarray,
+) -> float:
+    """Mean softmax cross-entropy from class probabilities."""
+    y_idx = np.asarray(y_true, dtype=np.intp)
+    p = np.asarray(probabilities, dtype=np.float64)
+    eps = 1e-12
+    return float(-np.mean(np.log(np.clip(p[np.arange(len(y_idx)), y_idx], eps, 1.0))))
+
+
 def evaluate(
     model: _ProbabilisticModel,
     X: np.ndarray,
@@ -55,11 +94,22 @@ def evaluate(
     X_arr = np.asarray(X, dtype=np.float64)
     if X_arr.ndim == 1:
         X_arr = X_arr.reshape(1, -1)
-    y_arr = np.asarray(y, dtype=np.float64)
-    p = model.predict_proba(X_arr)[:, 1]
-    loss = binary_cross_entropy_from_probabilities(y_arr, p)
-    accuracy = float(np.mean((p >= 0.5) == y_arr))
-    precision, recall, f1 = precision_recall_f1(y_arr, p)
+    y_arr = np.asarray(y, dtype=np.intp)
+    probabilities = model.predict_proba(X_arr)
+    n_classes = probabilities.shape[1]
+    if np.any(y_arr < 0) or np.any(y_arr >= n_classes):
+        raise ValueError("y contains class labels outside the model output range.")
+    predictions = np.argmax(probabilities, axis=1)
+    loss = softmax_cross_entropy_from_probabilities(y_arr, probabilities)
+    accuracy = float(np.mean(predictions == y_arr))
+    if n_classes == 2:
+        precision, recall, f1 = precision_recall_f1(y_arr, probabilities[:, 1])
+    else:
+        precision, recall, f1 = multiclass_precision_recall_f1(
+            y_arr,
+            predictions,
+            n_classes,
+        )
     return TrainingMetrics(
         loss=loss,
         accuracy=accuracy,

@@ -4,7 +4,7 @@ A **multilayer perceptron (MLP)** implemented in NumPy from scratch (no autograd
 
 ## Features
 
-- **Pure NumPy MLP**: vectorized forward/backward pass, ReLU or sigmoid hidden layers, 2-class output
+- **Pure NumPy MLP**: vectorized forward/backward pass, ReLU or sigmoid hidden layers, configurable input/output sizes
 - **Optimizers**: SGD and RMSprop
 - **Training**: train/validation split, learning curves, early stopping, optional batch training
 - **Hyperparameter search**: `--best` to run a grid and pick the best run; optional test-set ranking
@@ -17,19 +17,34 @@ A **multilayer perceptron (MLP)** implemented in NumPy from scratch (no autograd
 
 ## Installation
 
-From the project root:
+For this full project:
 
 ```bash
 uv sync
 ```
 
-Or with pip:
+This installs:
+
+- `mlp`: this project's breast-cancer training CLI, visualizer, telemetry, and dataset pipeline
+- `mlp_core`: the lightweight package pulled from `https://github.com/maujogue/mlp-core.git`
+
+For another project that only needs the lightweight reusable MLP/DQN package:
 
 ```bash
-pip install -e .
+uv add "mlp-core @ git+https://github.com/maujogue/mlp-core.git"
 ```
 
-This installs the `mlp` package and the CLI commands below.
+That installs only `mlp_core` and its NumPy dependency.
+
+Reusable package API:
+
+```python
+from mlp_core import DQN, MLPClassifier, MLPNetwork
+
+classifier = MLPClassifier(input_size=30, hidden_layers=[24, 24], output_size=2)
+network = MLPNetwork(input_size=4, hidden_layers=[64, 64], output_size=2)
+dqn = DQN(state_size=4, n_actions=2, hidden_layers=[64, 64])
+```
 
 ## Dataset format
 

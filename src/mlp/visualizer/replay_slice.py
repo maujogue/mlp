@@ -108,7 +108,7 @@ def loss_slice_grid(
         raise ValueError("param_i and param_j must differ")
 
     model = MLPClassifier(
-        n_features=manifest.input_dim,
+        input_size=manifest.input_dim,
         hidden_layers=tuple(manifest.layer_sizes),
         output_size=manifest.n_classes,
         seed=0,
